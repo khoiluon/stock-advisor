@@ -1,0 +1,28 @@
+# === Python (Django) ===
+__pycache__/
+*.py[cod]
+*.sqlite3
+venv/
+
+# === Node.js / ReactJS ===
+node_modules/
+build/
+dist/
+*.log
+
+# === IDEs ===
+.idea/
+.vscode/
+
+# === OS-specific ===
+.DS_Store
+Thumbs.db
+
+# === Environment Files ===
+.env
+.env.*
+
+
+# === Tailwind generated files (optional, nếu có build) ===
+*.css.map
+*.min.css
