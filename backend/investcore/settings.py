@@ -81,10 +81,16 @@ WSGI_APPLICATION = 'investcore.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+# backend/core/settings.py
+
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'stock_advisor_db',  # Tên database bạn vừa tạo ở Bước 1
+        'USER': 'root',    # Tên người dùng MySQL của bạn (thường là 'root')
+        'PASSWORD': '123123',# Mật khẩu MySQL của bạn
+        'HOST': 'localhost',              # Hoặc '127.0.0.1'
+        'PORT': '3306',                   # Port mặc định của MySQL
     }
 }
 
@@ -112,6 +118,18 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
 ]
 
+# CẤU HÌNH CHO DJANGO REST FRAMEWORK
+REST_FRAMEWORK = {
+    # Chỉ định phương thức xác thực mặc định là TokenAuthentication
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+    ],
+    # (Tùy chọn nhưng khuyến khích) Đặt quyền mặc định cho toàn bộ API
+    # Điều này có nghĩa là tất cả các API endpoint đều yêu cầu đăng nhập trừ khi được chỉ định khác
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ]
+}
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
