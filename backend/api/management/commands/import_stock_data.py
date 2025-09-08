@@ -1,97 +1,284 @@
-import os
+# backend/api/management/commands/seed_stock_data.py
+
+import time
+from datetime import datetime, timedelta
 import pandas as pd
 from django.core.management.base import BaseCommand
-from django.conf import settings
 from django.db import transaction
 from api.models import Stock, StockData
+from vnstock import Listing, Quote
+
+# --- CẤU HÌNH ---
+BATCH_SIZE = 10000  # Tăng để nhanh hơn
+INITIAL_DELAY = 2.0  # Tăng delay giữa ticker để tránh rate limit
+START_DATE = '2000-01-01'  # Mở rộng hơn để lấy data cũ nhất có thể
+
+# Cấu hình Retry (cải thiện)
+MAX_GENERAL_RETRIES = 3
+MAX_RATE_LIMIT_RETRIES = 30  # Tăng để kiên trì hơn
+RETRY_DELAY = 5
+RATE_LIMIT_BASE_WAIT = 30  # Giảm base wait, nhưng exponential vẫn tăng nhanh
+
+# Chế độ chạy
+TEST_MODE = False
+RESUME_FROM_TICKER = None  # Ví dụ: 'AAA' để resume
 
 
 class Command(BaseCommand):
-    help = 'Imports stock data from CSV files for HSX, HNX, and UPCOM into the database.'
+    help = 'Seeds the database with all stocks and their full historical data using vnstock (Fixed date issue).'
+
+    @transaction.atomic
+    def add_arguments(self, parser):
+        parser.add_argument('--clean', action='store_true', help='Clean old data before seeding.')
 
     def handle(self, *args, **options):
-        file_info = [
-            {'file_name': 'CafeF.HSX.Upto23.07.2025.csv', 'exchange': 'HOSE'},
-            {'file_name': 'CafeF.HNX.Upto23.07.2025.csv', 'exchange': 'HNX'},
-            {'file_name': 'CafeF.UPCOM.Upto23.07.2025.csv', 'exchange': 'UPCOM'},
+        if options['clean']:
+            self.stdout.write(self.style.WARNING("Xóa dữ liệu cũ..."))
+            StockData.objects.all().delete()
+            Stock.objects.all().delete()
+
+        self.stdout.write(
+            self.style.SUCCESS("=== Bắt đầu quy trình nạp dữ liệu từ vnstock (Phiên bản sửa lỗi date) ==="))
+
+        # --- GIAI ĐOẠN 1: LẤY METADATA CỔ PHIẾU ---
+        self.stdout.write(self.style.NOTICE("\n[Giai đoạn 1/2] Lấy danh sách, tên công ty, sàn và ngành..."))
+
+        try:
+            listing_client = Listing()
+            self.stdout.write("    -> Lấy danh sách theo sàn...")
+            df_full_list = listing_client.symbols_by_exchange()
+
+            self.stdout.write("    -> Lấy danh sách theo ngành...")
+            df_industries = listing_client.symbols_by_industries()
+
+            self.stdout.write("    -> Trộn dữ liệu sàn và ngành...")
+            industry_col = next(
+                (col for col in ['icb_name4', 'icb_name3', 'icb_name2'] if col in df_industries.columns), None)
+
+            if industry_col:
+                df_industries_subset = df_industries[['symbol', industry_col]].rename(
+                    columns={industry_col: 'industry'})
+                df_companies = pd.merge(df_full_list, df_industries_subset, on='symbol', how='left')
+                df_companies['industry'] = df_companies['industry'].fillna('N/A')
+            else:
+                self.stdout.write(self.style.WARNING("    -> Không tìm thấy cột industry. Gán là 'N/A'."))
+                df_companies = df_full_list.copy()
+                df_companies['industry'] = 'N/A'
+
+            self.stdout.write(self.style.SUCCESS(f"  -> Lấy thành công metadata cho {len(df_companies)} công ty."))
+
+        except Exception as e:
+            self.stdout.write(self.style.ERROR(f"  -> Lỗi khi lấy danh sách cổ phiếu: {e}"))
+            import traceback
+            traceback.print_exc()
+            return
+
+        df_companies.dropna(subset=['symbol'], inplace=True)
+
+        exchange_mapping = {'HOSE': 'HOSE', 'HNX': 'HNX', 'UPCOM': 'UPCOM'}
+        stocks_to_create = [
+            Stock(
+                ticker=row['symbol'],
+                company_name=row['organ_name'] if pd.notna(row['organ_name']) else row['symbol'],
+                exchange=exchange_mapping.get(row['exchange'], 'OTHER'),
+                industry=row['industry']
+            )
+            for index, row in df_companies.iterrows()
         ]
 
-        with transaction.atomic():
-            self.stdout.write(self.style.WARNING("Bắt đầu quá trình nhập dữ liệu. Xóa tất cả dữ liệu cũ..."))
-            Stock.objects.all().delete()
-            self.stdout.write(self.style.SUCCESS("Đã xóa dữ liệu cũ thành công."))
+        self.stdout.write(self.style.SUCCESS(f"  -> Đang lưu {len(stocks_to_create)} cổ phiếu vào database..."))
+        Stock.objects.bulk_create(stocks_to_create, ignore_conflicts=True)
 
-            # BƯỚC 1: TỔNG HỢP CÁC MÃ TICKER DUY NHẤT
-            self.stdout.write("Bước 1: Đang tổng hợp các mã cổ phiếu duy nhất...")
-            unique_tickers_map = {}
-            for info in file_info:
-                file_path = os.path.join(settings.BASE_DIR, 'data', info['file_name'])
-                if not os.path.exists(file_path): continue
-                df = pd.read_csv(file_path, usecols=['<Ticker>'])
-                df.columns = df.columns.str.replace('<', '').str.replace('>', '')
-                df.dropna(subset=['Ticker'], inplace=True)
-                for ticker in df['Ticker'].unique():
-                    normalized_ticker = str(ticker).upper()
-                    if normalized_ticker not in unique_tickers_map:
-                        unique_tickers_map[normalized_ticker] = info['exchange']
+        all_stocks_map = {stock.ticker: stock for stock in Stock.objects.all()}
+        tickers_in_db = list(all_stocks_map.keys())
+
+        # CẢI THIỆN LỌC MÃ: Giữ mã 3-5 ký tự, chỉ alpha (A-Z), skip nếu chứa số hoặc ký tự lạ
+        original_count = len(tickers_in_db)
+        tickers_in_db = [
+            ticker for ticker in tickers_in_db
+            if 3 <= len(ticker) <= 5 and ticker.isalpha() and not any(c.isdigit() for c in ticker)
+        ]
+        skipped_count = original_count - len(tickers_in_db)
+
+        self.stdout.write(self.style.SUCCESS(
+            f"  -> Lọc thành công: Giữ {len(tickers_in_db)} mã cổ phiếu hợp lệ, bỏ qua {skipped_count} mã (chứng quyền/trái phiếu/không hợp lệ)."))
+
+        if TEST_MODE:
+            tickers_in_db = tickers_in_db[:50]
             self.stdout.write(
-                self.style.SUCCESS(f"  -> Đã tìm thấy {len(unique_tickers_map)} mã duy nhất trên tất cả các sàn."))
+                self.style.WARNING(f"  -> CHẾ ĐỘ TEST: Chỉ xử lý {len(tickers_in_db)} mã đầu tiên sau lọc."))
 
-            # BƯỚC 2: TẠO CÁC ĐỐI TƯỢNG STOCK
-            self.stdout.write("Bước 2: Đang tạo các đối tượng Stock trong database...")
-            stocks_to_create = [
-                Stock(ticker=ticker, company_name=f"{ticker} Company", exchange=exchange)
-                for ticker, exchange in unique_tickers_map.items()
-            ]
-            Stock.objects.bulk_create(stocks_to_create)
-            self.stdout.write(self.style.SUCCESS("  -> Đã tạo xong các đối tượng Stock."))
+        if RESUME_FROM_TICKER:
+            try:
+                start_index = tickers_in_db.index(RESUME_FROM_TICKER)
+                tickers_in_db = tickers_in_db[start_index:]
+                self.stdout.write(
+                    self.style.WARNING(f"  -> TIẾP TỤC từ mã {RESUME_FROM_TICKER} (còn lại {len(tickers_in_db)} mã)."))
+            except ValueError:
+                self.stdout.write(self.style.ERROR(f"  -> Không tìm thấy mã {RESUME_FROM_TICKER}."))
+                return
 
-            # BƯỚC 3: TẠO CÁC ĐỐI TƯỢNG STOCKDATA
-            self.stdout.write("Bước 3: Đang chuẩn bị dữ liệu lịch sử để nhập...")
-            all_stocks_map = {stock.ticker: stock for stock in Stock.objects.all()}
-            stock_data_to_create = []
+        # --- GIAI ĐOẠN 2: LẤY DỮ LIỆU LỊCH SỬ (SỬA LỖI DATE) ---
+        self.stdout.write(self.style.NOTICE("\n[Giai đoạn 2/2] Lấy dữ liệu giá lịch sử..."))
+        stock_data_to_create = []
+        today_str = datetime.now().strftime('%Y-%m-%d')
 
-            # === SỬA LỖI QUAN TRỌNG: DÙNG SET ĐỂ LỌC TRÙNG DỮ LIỆU LỊCH SỬ ===
-            processed_entries = set()
+        success_count = 0
+        error_count = 0
+        low_data_count = 0  # Đếm ticker có ít data
+        start_time = datetime.now()
 
-            for info in file_info:
-                file_path = os.path.join(settings.BASE_DIR, 'data', info['file_name'])
-                if not os.path.exists(file_path): continue
+        i = 0
+        while i < len(tickers_in_db):
+            ticker = tickers_in_db[i]
+            general_retry_count = 0
+            rate_limit_retry_count = 0
+            ticker_processed = False
 
-                self.stdout.write(f"  -> Đang đọc dữ liệu từ {info['file_name']}...")
-                df = pd.read_csv(file_path)
-                df.columns = df.columns.str.replace('<', '').str.replace('>', '')
-                df.dropna(subset=['Ticker', 'DTYYYYMMDD'], inplace=True)
+            while (
+                    general_retry_count < MAX_GENERAL_RETRIES or rate_limit_retry_count < MAX_RATE_LIMIT_RETRIES) and not ticker_processed:
+                try:
+                    self.stdout.write(
+                        f"  -> Đang xử lý mã {i + 1}/{len(tickers_in_db)}: {ticker} (Retry: G{general_retry_count}/{MAX_GENERAL_RETRIES}, RL{rate_limit_retry_count}/{MAX_RATE_LIMIT_RETRIES})")
 
-                for index, row in df.iterrows():
-                    normalized_ticker = str(row['Ticker']).upper()
-                    stock_instance = all_stocks_map.get(normalized_ticker)
+                    quote_client = Quote(symbol=ticker)
+                    df_history = quote_client.history(start=START_DATE, end=today_str, interval='1D')
 
-                    if stock_instance:
-                        date_object = pd.to_datetime(row['DTYYYYMMDD'], format='%Y%m%d').date()
+                    if df_history is None or df_history.empty:
+                        self.stdout.write(self.style.WARNING(f"    -> Mã {ticker} không có dữ liệu. Bỏ qua."))
+                        error_count += 1
+                        ticker_processed = True
+                        continue
 
-                        # Tạo một key duy nhất cho mỗi cặp (ticker, date)
-                        entry_key = (normalized_ticker, date_object)
+                    # SỬA LỖI DATE: Ưu tiên cột 'time' nếu có (thông dụng trong vnstock)
+                    date_col = 'time' if 'time' in df_history.columns else None
+                    if date_col:
+                        df_history[date_col] = pd.to_datetime(df_history[date_col], format='%Y-%m-%d', errors='coerce')
+                        self.stdout.write(f"    -> Sử dụng cột '{date_col}' cho date.")
+                    else:
+                        # Fallback: Convert index nếu là datetime-like
+                        if not isinstance(df_history.index, pd.DatetimeIndex):
+                            df_history.index = pd.to_datetime(df_history.index, format='%Y-%m-%d', errors='coerce')
+                        self.stdout.write(f"    -> Sử dụng index cho date.")
 
-                        # Chỉ thêm vào danh sách nếu cặp này chưa được xử lý
-                        if entry_key not in processed_entries:
+                    required_columns = ['open', 'high', 'low', 'close', 'volume']
+                    if not all(col in df_history.columns for col in required_columns):
+                        self.stdout.write(self.style.WARNING(f"    -> Thiếu cột dữ liệu cho {ticker}. Bỏ qua."))
+                        error_count += 1
+                        ticker_processed = True
+                        continue
+
+                    df_history.dropna(subset=required_columns + ([date_col] if date_col else []), inplace=True)
+                    if df_history.empty:
+                        self.stdout.write(self.style.WARNING(f"    -> Dữ liệu {ticker} rỗng sau lọc. Bỏ qua."))
+                        error_count += 1
+                        ticker_processed = True
+                        continue
+
+                    # Lấy date từ cột hoặc index
+                    stock_instance = all_stocks_map.get(ticker)
+                    if not stock_instance:
+                        ticker_processed = True
+                        continue
+
+                    rows_added = 0
+                    for _, row in df_history.iterrows():
+                        try:
+                            if date_col:
+                                index_date = row[date_col]
+                            else:
+                                index_date = df_history.index[rows_added]  # Hoặc row.name nếu multiindex
+
+                            if pd.isna(index_date):
+                                self.stdout.write(self.style.WARNING(f"    -> Skip row với date NaT cho {ticker}."))
+                                continue
+
+                            date_obj = index_date.date()
                             stock_data_to_create.append(
                                 StockData(
                                     stock=stock_instance,
-                                    date=date_object,
-                                    open=row['Open'],
-                                    high=row['High'],
-                                    low=row['Low'],
-                                    close=row['Close'],
-                                    volume=row['Volume']
+                                    date=date_obj,
+                                    open=float(row['open']),
+                                    high=float(row['high']),
+                                    low=float(row['low']),
+                                    close=float(row['close']),
+                                    volume=int(row['volume'])
                                 )
                             )
-                            # Đánh dấu cặp (ticker, date) này là đã xử lý
-                            processed_entries.add(entry_key)
+                            rows_added += 1
+                        except (ValueError, TypeError) as row_err:
+                            self.stdout.write(self.style.WARNING(f"    -> Skip row lỗi date cho {ticker}: {row_err}"))
+                            continue  # Skip row này, không bỏ ticker
 
-            self.stdout.write(self.style.SUCCESS(
-                f"Bắt đầu nhập {len(stock_data_to_create)} điểm dữ liệu lịch sử (đã lọc trùng). Quá trình này có thể mất vài phút..."))
-            StockData.objects.bulk_create(stock_data_to_create, batch_size=2000)
-            self.stdout.write(self.style.SUCCESS("  -> Đã nhập xong dữ liệu lịch sử."))
+                    if rows_added == 0:
+                        self.stdout.write(self.style.WARNING(f"    -> Không thêm được row nào cho {ticker}. Bỏ qua."))
+                        error_count += 1
+                        ticker_processed = True
+                        continue
 
-        self.stdout.write(self.style.SUCCESS("HOÀN TẤT: Toàn bộ dữ liệu đã được nhập vào database thành công!"))
+                    if rows_added < 100:  # Warning nếu data ít (mã mới hoặc lỗi)
+                        low_data_count += 1
+                        self.stdout.write(self.style.WARNING(f"    -> Data ít cho {ticker}: chỉ {rows_added} rows."))
+
+                    self.stdout.write(f"    -> Thêm {rows_added} rows cho {ticker}.")
+
+                    if len(stock_data_to_create) >= BATCH_SIZE:
+                        self.stdout.write(f"    -> Lưu batch {len(stock_data_to_create)} bản ghi...")
+                        StockData.objects.bulk_create(stock_data_to_create, ignore_conflicts=True)
+                        stock_data_to_create = []
+
+                    success_count += 1
+                    ticker_processed = True
+
+                except Exception as e:
+                    error_msg = str(e)
+                    is_rate_limit = "Rate limit exceeded" in error_msg or "quá nhiều request" in error_msg or "429" in error_msg
+
+                    if is_rate_limit:
+                        rate_limit_retry_count += 1
+                        wait_time = min(RATE_LIMIT_BASE_WAIT * (2 ** (rate_limit_retry_count - 1)), 300)  # Cap 5 phút
+                        self.stdout.write(self.style.WARNING(
+                            f"⚠️ Rate limit {ticker}. Chờ {wait_time}s (lần {rate_limit_retry_count})."))
+                        time.sleep(wait_time)
+                        if rate_limit_retry_count >= MAX_RATE_LIMIT_RETRIES:
+                            self.stdout.write(self.style.ERROR(f"    -> Bỏ qua {ticker} sau max rate limit retries."))
+                            error_count += 1
+                            ticker_processed = True
+                    else:
+                        general_retry_count += 1
+                        if general_retry_count < MAX_GENERAL_RETRIES:
+                            self.stdout.write(self.style.WARNING(
+                                f"    -> Lỗi tạm {ticker}. Retry sau {RETRY_DELAY}s (lần {general_retry_count})."))
+                            time.sleep(RETRY_DELAY)
+                        else:
+                            self.stdout.write(self.style.ERROR(f"    -> Lỗi cố định {ticker}: {error_msg}"))
+                            error_count += 1
+                            ticker_processed = True
+
+            if ticker_processed:
+                time.sleep(INITIAL_DELAY)
+                i += 1
+
+            elapsed = (datetime.now() - start_time).total_seconds()
+            processed = i
+            avg_time_per_ticker = elapsed / processed if processed > 0 else 0
+            remaining_tickers = len(tickers_in_db) - processed
+            remaining_seconds = remaining_tickers * avg_time_per_ticker
+            eta = datetime.now() + timedelta(seconds=remaining_seconds)
+            self.stdout.write(self.style.NOTICE(
+                f"    -> Tiến độ: {processed}/{len(tickers_in_db)} | Success: {success_count} | Errors: {error_count} | Low data: {low_data_count} | ETA: {remaining_seconds / 60:.1f} phút ({eta.strftime('%H:%M:%S')})"
+            ))
+
+        # Lưu batch cuối
+        if stock_data_to_create:
+            self.stdout.write(self.style.SUCCESS(f"    -> Lưu {len(stock_data_to_create)} bản ghi cuối..."))
+            StockData.objects.bulk_create(stock_data_to_create, ignore_conflicts=True)
+
+        # Verify tổng data
+        total_records = StockData.objects.count()
+        self.stdout.write(self.style.SUCCESS(f"\n=== HOÀN TẤT! ==="))
+        self.stdout.write(self.style.SUCCESS(
+            f"Thống kê: {success_count} ticker thành công, {error_count} lỗi, {low_data_count} ticker data ít."))
+        self.stdout.write(self.style.SUCCESS(f"Tổng records trong DB: {total_records} (nên ~3-5M cho lịch sử đầy đủ)."))
+        total_time = (datetime.now() - start_time).total_seconds()
+        self.stdout.write(self.style.SUCCESS(f"Thời gian chạy: {total_time / 60:.1f} phút."))

@@ -9,8 +9,9 @@ https://docs.djangoproject.com/en/5.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
-
+from decouple import config
 from pathlib import Path
+from celery.schedules import crontab
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -19,11 +20,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-))xk9qsv1=4p_g*3r0e8y$^(z)z--*)q4gt0a546j8n7&_60a&'
+SECRET_KEY = config('SECRET_KEY')
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = []
 
@@ -38,10 +37,12 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
+    'django_celery_beat',
     # Thư viện bên thứ ba
     'rest_framework',
     'rest_framework.authtoken',
     'corsheaders',
+
 
     # App của dự án
     'api',
@@ -86,11 +87,11 @@ WSGI_APPLICATION = 'investcore.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'stock_advisor_db',  # Tên database bạn vừa tạo ở Bước 1
-        'USER': 'root',    # Tên người dùng MySQL của bạn (thường là 'root')
-        'PASSWORD': '123123',# Mật khẩu MySQL của bạn
-        'HOST': 'localhost',              # Hoặc '127.0.0.1'
-        'PORT': '3306',                   # Port mặc định của MySQL
+        'NAME': config('DB_NAME'),
+        'USER': config('DB_USER'),
+        'PASSWORD': config('DB_PASSWORD'),
+        'HOST': config('DB_HOST'),
+        'PORT': config('DB_PORT'),
     }
 }
 
@@ -151,3 +152,34 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ==============================================================================
+# CELERY SETTINGS
+# ==============================================================================
+CELERY_BROKER_URL = config('REDIS_URL')
+CELERY_RESULT_BACKEND = config('REDIS_URL')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'Asia/Ho_Chi_Minh' # Đặt múi giờ Việt Nam
+
+# Cấu hình cho Celery Beat
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+# Lịch trình chạy tác vụ
+CELERY_BEAT_SCHEDULE = {
+    'crawl-news-every-30-minutes': {
+        'task': 'api.tasks.crawl_news_task',
+        'schedule': 1800.0,
+    },
+    'fetch-daily-data-after-market-close': {
+        'task': 'api.tasks.fetch_daily_data_task',
+        # Chạy vào 17:00 (5 PM) mỗi ngày làm việc
+        'schedule': crontab(hour=17, minute=0, day_of_week='mon-fri'),
+    },
+    'run-stock-analysis-daily': {
+        'task': 'api.tasks.run_stock_analysis_task', # Giả sử bạn đã chuyển nó vào tasks.py
+        # Chạy vào 18:00 (6 PM), SAU KHI đã lấy dữ liệu xong
+        'schedule': crontab(hour=18, minute=0, day_of_week='mon-fri'),
+    },
+}

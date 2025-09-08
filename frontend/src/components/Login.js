@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { FiMail, FiLock } from 'react-icons/fi';
+import toast from 'react-hot-toast';
 
 function Login() {
     const [formData, setFormData] = useState({
@@ -17,16 +18,23 @@ function Login() {
     };
 
     const handleSubmit = async (e) => {
-        e.preventDefault();
-        setErrorMsg('');
-        try {
-            const response = await axios.post('http://localhost:8000/api/login/', formData);
+    e.preventDefault();
+    setErrorMsg('');
+    const loginPromise = axios.post('http://localhost:8000/api/login/', formData);
+
+    toast.promise(loginPromise, {
+        loading: 'Signing in...',
+        success: (response) => {
             localStorage.setItem('token', response.data.token);
+            localStorage.setItem('username', formData.username);
             navigate('/');
-        } catch (error) {
-            setErrorMsg(error.response?.data?.detail || 'Đăng nhập thất bại!');
+            return `Welcome back, ${formData.username}!`;
+        },
+        error: (error) => {
+            return error.response?.data?.non_field_errors?.[0] || 'Login failed. Check your credentials.';
         }
-    };
+    });
+};
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0f2027] via-[#2c5364] to-[#1c1c3c]">
