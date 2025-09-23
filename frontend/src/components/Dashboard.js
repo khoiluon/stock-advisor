@@ -128,7 +128,7 @@ const Dashboard = () => {
       if (!isFavorite) {
         // Add to favorites
         await axios.post(
-          'http://127.0.0.1:8000/api/watchlist/',
+          `${process.env.REACT_APP_API_URL}/watchlist/`,
           { stock_id: stockInfo.ticker || ticker },
           { headers: { Authorization: `Token ${token}` } }
         );
@@ -136,7 +136,7 @@ const Dashboard = () => {
         toast.success(`${stockInfo.ticker || ticker} was added to your favorites!`);
       } else {
         // Remove from favorites
-        const res = await axios.get('http://127.0.0.1:8000/api/watchlist/', {
+        const res = await axios.get(`${process.env.REACT_APP_API_URL}/watchlist/`, {
           headers: { Authorization: `Token ${token}` },
         });
         const favItem = res.data.find(
@@ -145,7 +145,7 @@ const Dashboard = () => {
 
         if (favItem) {
           await axios.delete(
-            `http://127.0.0.1:8000/api/watchlist/${favItem.id}/`,
+            `${process.env.REACT_APP_API_URL}/watchlist/${favItem.id}/`,
             { headers: { Authorization: `Token ${token}` } }
           );
           setIsFavorite(false);
@@ -201,14 +201,14 @@ const Dashboard = () => {
       try {
         // Get stock data (price, volume, etc)
         const stockRes = await axios.get(
-          `http://127.0.0.1:8000/api/stock-data/?ticker=${ticker}`,
+          `${process.env.REACT_APP_API_URL}/stock-data/?ticker=${ticker}`,
           { headers: { Authorization: `Token ${token}` } }
         );
         setStockData(stockRes.data);
 
         // Get stock info (company name, exchange, industry)
         const infoRes = await axios.get(
-          `http://127.0.0.1:8000/api/stocks/${ticker}/`,
+          `${process.env.REACT_APP_API_URL}/stocks/${ticker}/`,
           { headers: { Authorization: `Token ${token}` } }
         );
         setStockInfo(infoRes.data);
@@ -326,7 +326,7 @@ const Dashboard = () => {
             </div>
           </div>
 
-          <div className="text-gray-400">No stock data available</div>
+          {/* <div className="text-gray-400">No stock data available</div> */}
         </div>
 
         {/* Chart */}
@@ -454,6 +454,73 @@ const Dashboard = () => {
           )}
         </div>
 
+        {/* === MACD Section === */}
+        <div className="mb-4 border-t border-gray-700 pt-4 mt-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-semibold">MACD (Moving Average Convergence Divergence)</span>
+            <label className="flex items-center cursor-pointer">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  className="sr-only"
+                  checked={indicators.macd.visible}
+                  onChange={(e) =>
+                    setIndicators((prev) => ({
+                      ...prev,
+                      macd: { ...prev.macd, visible: e.target.checked },
+                    }))
+                  }
+                />
+                <div className="block bg-gray-600 w-14 h-8 rounded-full"></div>
+                <div
+                  className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition ${indicators.macd.visible ? "translate-x-full bg-green-400" : ""}`}
+                ></div>
+              </div>
+            </label>
+          </div>
+
+          {indicators.macd.visible && (
+            <div className="flex items-center space-x-2 bg-[#1a2332] p-2 rounded mt-2">
+              <label className="text-gray-300">Fast:</label>
+              <input
+                type="number"
+                value={indicators.macd.fast}
+                onChange={(e) =>
+                  setIndicators((prev) => ({
+                    ...prev,
+                    macd: { ...prev.macd, fast: Number(e.target.value) },
+                  }))
+                }
+                className="bg-[#232e43] text-white px-2 py-1 rounded w-16"
+              />
+              <label className="text-gray-300">Slow:</label>
+              <input
+                type="number"
+                value={indicators.macd.slow}
+                onChange={(e) =>
+                  setIndicators((prev) => ({
+                    ...prev,
+                    macd: { ...prev.macd, slow: Number(e.target.value) },
+                  }))
+                }
+                className="bg-[#232e43] text-white px-2 py-1 rounded w-16"
+              />
+              <label className="text-gray-300">Signal:</label>
+              <input
+                type="number"
+                value={indicators.macd.signal}
+                onChange={(e) =>
+                  setIndicators((prev) => ({
+                    ...prev,
+                    macd: { ...prev.macd, signal: Number(e.target.value) },
+                  }))
+                }
+                className="bg-[#232e43] text-white px-2 py-1 rounded w-16"
+              />
+            </div>
+          )}
+        </div>
+
         {/* === RSI Section === */}
         <div className="mb-4 border-t border-gray-700 pt-4 mt-4">
           <div className="flex items-center justify-between mb-2">
@@ -473,8 +540,7 @@ const Dashboard = () => {
                 />
                 <div className="block bg-gray-600 w-14 h-8 rounded-full"></div>
                 <div
-                  className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition ${indicators.rsi.visible ? "translate-x-full bg-green-400" : ""
-                    }`}
+                  className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition ${indicators.rsi.visible ? "translate-x-full bg-green-400" : ""}`}
                 ></div>
               </div>
             </label>

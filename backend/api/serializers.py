@@ -82,15 +82,12 @@ class PotentialStockSerializer(serializers.ModelSerializer):
     Serializer để hiển thị danh sách các cổ phiếu tiềm năng.
     Chuyển đổi dữ liệu từ model để phù hợp với giao diện.
     """
-    # Lồng StockSerializer để hiển thị thông tin chi tiết của cổ phiếu
     stock = StockSerializer(read_only=True)
 
-    # Dùng SerializerMethodField để xử lý logic chuyển đổi cho key_reasons
     key_reasons = serializers.SerializerMethodField()
 
     class Meta:
         model = PotentialStock
-        # Liệt kê tất cả các trường đã hoàn thiện trong model
         fields = (
             'stock',
             'analysis_date',
@@ -99,18 +96,11 @@ class PotentialStockSerializer(serializers.ModelSerializer):
             'timeframe',
             'confidence',
             'score',
-            'key_reasons',  # Trường đã được xử lý
+            'key_reasons',
             'reason'
         )
 
     def get_key_reasons(self, obj):
-        """
-        Hàm này sẽ được tự động gọi cho trường 'key_reasons'.
-        Nó nhận vào đối tượng PotentialStock (obj) và thực hiện chuyển đổi.
-        Input: "MA Crossover Bullish,Volume Surge,Positive MACD"
-        Output: ["MA Crossover Bullish", "Volume Surge", "Positive MACD"]
-        """
         if obj.key_reasons:
-            # Tách chuỗi bằng dấu phẩy và loại bỏ các khoảng trắng thừa
             return [reason.strip() for reason in obj.key_reasons.split(',')]
-        return []  # Trả về mảng rỗng nếu không có reason
+        return []

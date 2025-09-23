@@ -23,7 +23,7 @@ const ScreenerPage = () => {
         }
 
         try {
-            let url = 'http://127.0.0.1:8000/api/screener/';
+            let url = `${process.env.REACT_APP_API_URL}/screener/`;
             const params = {};
 
             // Thêm tham số timeframe vào URL nếu người dùng đã chọn

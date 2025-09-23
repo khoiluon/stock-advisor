@@ -162,6 +162,8 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Asia/Ho_Chi_Minh' # Đặt múi giờ Việt Nam
+CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_EAGER_PROPAGATES = True
 
 # Cấu hình cho Celery Beat
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
@@ -170,16 +172,15 @@ CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 CELERY_BEAT_SCHEDULE = {
     'crawl-news-every-30-minutes': {
         'task': 'api.tasks.crawl_news_task',
-        'schedule': 1800.0,
+        'schedule': 1800.0,  # 30 phút
     },
     'fetch-daily-data-after-market-close': {
-        'task': 'api.tasks.fetch_daily_data_task',
-        # Chạy vào 17:00 (5 PM) mỗi ngày làm việc
+        'task': 'api.tasks.fetch_daily_data_vnstock_task',
         'schedule': crontab(hour=17, minute=0, day_of_week='mon-fri'),
+        'options': {'expires': 3600},
     },
     'run-stock-analysis-daily': {
-        'task': 'api.tasks.run_stock_analysis_task', # Giả sử bạn đã chuyển nó vào tasks.py
-        # Chạy vào 18:00 (6 PM), SAU KHI đã lấy dữ liệu xong
+        'task': 'api.tasks.run_stock_analysis_task',
         'schedule': crontab(hour=18, minute=0, day_of_week='mon-fri'),
     },
 }

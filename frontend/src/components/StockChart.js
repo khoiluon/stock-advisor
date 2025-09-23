@@ -19,6 +19,40 @@ function calculateSMA(data, period) {
   return result;
 }
 
+// MACD calculation helper
+function calculateMACD(data, fast = 12, slow = 26, signal = 9) {
+  // Calculate EMA
+  function ema(arr, period, key = 'Close') {
+    const k = 2 / (period + 1);
+    let emaArr = [];
+    let prev;
+    for (let i = 0; i < arr.length; i++) {
+      const price = parseFloat(arr[i][key]);
+      if (i === 0) {
+        prev = price;
+      } else {
+        prev = price * k + prev * (1 - k);
+      }
+      emaArr.push(prev);
+    }
+    return emaArr;
+  }
+  const fastEMA = ema(data, fast);
+  const slowEMA = ema(data, slow);
+  const macdLine = fastEMA.map((val, i) => val - slowEMA[i]);
+  // Signal line
+  const signalLine = ema(macdLine.map((v, i) => ({ Close: v })), signal, 'Close');
+  // Histogram
+  const histogram = macdLine.map((v, i) => v - signalLine[i]);
+  // Format for chart
+  return data.map((d, i) => ({
+    time: d.date,
+    macd: macdLine[i],
+    signal: signalLine[i],
+    hist: histogram[i],
+  }));
+}
+
 const StockChart = ({ data, maLines = [], indicators = {} }) => {
   const chartContainerRef = useRef(null);
 
@@ -101,27 +135,92 @@ const StockChart = ({ data, maLines = [], indicators = {} }) => {
       lower.setData(bbandsData.map(d => ({ time: d.time, value: d.lower })));
     }
 
+    // === MACD Indicator ===
+    let macdCreated = false;
+    if (indicators.macd && indicators.macd.visible && indicators.rsi && indicators.rsi.visible) {
+      // Nếu cả MACD và RSI đều bật, chia vùng rõ hơn
+      const { fast = 12, slow = 26, signal = 9 } = indicators.macd;
+      const macdData = calculateMACD(data, fast, slow, signal);
+      // MACD line
+      const macdSeries = chart.addLineSeries({
+        color: '#38bdf8',
+        lineWidth: 2,
+        priceScaleId: 'macd',
+      });
+      macdCreated = true;
+      macdSeries.setData(macdData.map(d => ({ time: d.time, value: d.macd })));
+      // Signal line
+      const signalSeries = chart.addLineSeries({
+        color: '#a78bfa',
+        lineWidth: 2,
+        priceScaleId: 'macd',
+        lineStyle: 2,
+      });
+      signalSeries.setData(macdData.map(d => ({ time: d.time, value: d.signal })));
+      // Histogram
+      const histSeries = chart.addHistogramSeries({
+        color: '#facc15',
+        priceScaleId: 'macd',
+        priceFormat: { type: 'volume' },
+        scaleMargins: { top: 0.7, bottom: 0 },
+      });
+      histSeries.setData(macdData.map(d => ({ time: d.time, value: d.hist, color: d.hist >= 0 ? '#22c55e' : '#ef4444' })));
+      // Scale margins: MACD ở giữa, RSI dưới cùng
+      // Chỉ gọi applyOptions nếu đã tạo series
+      if (macdCreated) chart.priceScale('macd').applyOptions({ scaleMargins: { top: 0.35, bottom: 0.35 } });
+      // RSI sẽ được tạo phía dưới
+    } else if (indicators.macd && indicators.macd.visible) {
+      // Chỉ MACD
+      const { fast = 12, slow = 26, signal = 9 } = indicators.macd;
+      const macdData = calculateMACD(data, fast, slow, signal);
+      const macdSeries = chart.addLineSeries({
+        color: '#38bdf8',
+        lineWidth: 2,
+        priceScaleId: 'macd',
+      });
+      macdCreated = true;
+      macdSeries.setData(macdData.map(d => ({ time: d.time, value: d.macd })));
+      const signalSeries = chart.addLineSeries({
+        color: '#a78bfa',
+        lineWidth: 2,
+        priceScaleId: 'macd',
+        lineStyle: 2,
+      });
+      signalSeries.setData(macdData.map(d => ({ time: d.time, value: d.signal })));
+      const histSeries = chart.addHistogramSeries({
+        color: '#facc15',
+        priceScaleId: 'macd',
+        priceFormat: { type: 'volume' },
+        scaleMargins: { top: 0.7, bottom: 0 },
+      });
+      histSeries.setData(macdData.map(d => ({ time: d.time, value: d.hist, color: d.hist >= 0 ? '#22c55e' : '#ef4444' })));
+      if (macdCreated) chart.priceScale('macd').applyOptions({ scaleMargins: { top: 0.55, bottom: 0.15 } });
+    }
+
     // === RSI Indicator ===
     if (indicators.rsi && indicators.rsi.visible) {
-      // B1: tạo series RSI trước
+      // Tạo series RSI
       const rsiSeries = chart.addLineSeries({
         color: '#fcd34d',
         lineWidth: 2,
         priceScaleId: 'rsi',
       });
 
-      // B2: sau đó mới apply options cho scale 'rsi'
-      chart.priceScale('rsi').applyOptions({
-        scaleMargins: { top: 0.70, bottom: 0.15 },
-      });
 
-      // B3: dữ liệu RSI
+      // Nếu MACD cũng bật, scaleMargins cho rsi sẽ khác
+      if (macdCreated) {
+        chart.priceScale('rsi').applyOptions({ scaleMargins: { top: 0.7, bottom: 0.05 } });
+        chart.priceScale('right').applyOptions({ scaleMargins: { top: 0, bottom: 0.65 } });
+      } else {
+        chart.priceScale('rsi').applyOptions({ scaleMargins: { top: 0.70, bottom: 0.15 } });
+        chart.priceScale('right').applyOptions({ scaleMargins: { top: 0, bottom: 0.30 } });
+      }
+
       const rsiData = data
         .map(d => ({ time: d.date, value: Number(d.RSI_14) }))
         .filter(p => Number.isFinite(p.value));
       rsiSeries.setData(rsiData);
 
-      // B4: các đường overbought / oversold
       rsiSeries.createPriceLine({
         price: 70,
         color: '#ef4444',
@@ -138,9 +237,6 @@ const StockChart = ({ data, maLines = [], indicators = {} }) => {
         axisLabelVisible: true,
         title: 'Oversold',
       });
-
-      // B5: thu nhỏ khung giá chính (candlestick) để chừa chỗ
-      chart.priceScale('right').applyOptions({ scaleMargins: { top: 0, bottom: 0.30 } });
     }
 
     // === Volume ===

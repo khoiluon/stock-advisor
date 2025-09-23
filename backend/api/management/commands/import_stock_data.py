@@ -9,19 +9,17 @@ from api.models import Stock, StockData
 from vnstock import Listing, Quote
 
 # --- CẤU HÌNH ---
-BATCH_SIZE = 10000  # Tăng để nhanh hơn
-INITIAL_DELAY = 2.0  # Tăng delay giữa ticker để tránh rate limit
-START_DATE = '2000-01-01'  # Mở rộng hơn để lấy data cũ nhất có thể
+BATCH_SIZE = 10000
+INITIAL_DELAY = 2.0
+START_DATE = '2000-01-01'
 
-# Cấu hình Retry (cải thiện)
 MAX_GENERAL_RETRIES = 3
-MAX_RATE_LIMIT_RETRIES = 30  # Tăng để kiên trì hơn
+MAX_RATE_LIMIT_RETRIES = 30
 RETRY_DELAY = 5
-RATE_LIMIT_BASE_WAIT = 30  # Giảm base wait, nhưng exponential vẫn tăng nhanh
+RATE_LIMIT_BASE_WAIT = 30
 
-# Chế độ chạy
 TEST_MODE = False
-RESUME_FROM_TICKER = None  # Ví dụ: 'AAA' để resume
+RESUME_FROM_TICKER = None
 
 
 class Command(BaseCommand):
@@ -92,7 +90,6 @@ class Command(BaseCommand):
         all_stocks_map = {stock.ticker: stock for stock in Stock.objects.all()}
         tickers_in_db = list(all_stocks_map.keys())
 
-        # CẢI THIỆN LỌC MÃ: Giữ mã 3-5 ký tự, chỉ alpha (A-Z), skip nếu chứa số hoặc ký tự lạ
         original_count = len(tickers_in_db)
         tickers_in_db = [
             ticker for ticker in tickers_in_db
@@ -125,7 +122,7 @@ class Command(BaseCommand):
 
         success_count = 0
         error_count = 0
-        low_data_count = 0  # Đếm ticker có ít data
+        low_data_count = 0
         start_time = datetime.now()
 
         i = 0
@@ -175,7 +172,6 @@ class Command(BaseCommand):
                         ticker_processed = True
                         continue
 
-                    # Lấy date từ cột hoặc index
                     stock_instance = all_stocks_map.get(ticker)
                     if not stock_instance:
                         ticker_processed = True

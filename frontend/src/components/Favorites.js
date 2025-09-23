@@ -13,7 +13,7 @@ const Favorites = () => {
 
   const fetchFavorites = async () => {
     const token = localStorage.getItem('token');
-    const res = await axios.get('http://127.0.0.1:8000/api/watchlist/', {
+    const res = await axios.get(`${process.env.REACT_APP_API_URL}/watchlist/`, {
       headers: { 'Authorization': `Token ${token}` }
     });
     setFavorites(res.data);
@@ -21,7 +21,7 @@ const Favorites = () => {
 
   const handleDelete = async (id) => {
     const token = localStorage.getItem('token');
-    await axios.delete(`http://127.0.0.1:8000/api/watchlist/${id}/`, {
+    await axios.delete(`${process.env.REACT_APP_API_URL}/watchlist/${id}/`, {
       headers: { 'Authorization': `Token ${token}` }
     });
     setFavorites(favorites.filter(fav => fav.id !== id));

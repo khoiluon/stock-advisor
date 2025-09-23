@@ -27,7 +27,7 @@ class StockDataAdmin(admin.ModelAdmin):
 class WatchlistAdmin(admin.ModelAdmin):
     list_display = ('user', 'stock', 'added_at')
     search_fields = ('user__username', 'stock__ticker')
-    list_filter = ('added_at',)  # Lọc theo thời gian thêm
+    list_filter = ('added_at',)
 
 # 5. Alert Admin
 @admin.register(Alert)

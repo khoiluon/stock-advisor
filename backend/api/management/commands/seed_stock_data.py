@@ -8,10 +8,9 @@ from django.db import transaction
 from api.models import Stock, StockData
 from vnstock import Listing, Quote
 
-# --- CẤU HÌNH TỐI ƯU ---
-BATCH_SIZE = 20000  # Tăng để nhanh hơn (Django bulk_create handle tốt)
-INITIAL_DELAY = 1.5  # Cân bằng: Giảm nhẹ vì test ok, tránh rate limit
-DEFAULT_START_DATE = '2020-01-01'  # Đủ cho TA dài hạn (~5.5 năm, ~1250 trading days/mã)
+BATCH_SIZE = 20000
+INITIAL_DELAY = 1.5
+DEFAULT_START_DATE = '2020-01-01'
 
 # Retry
 MAX_GENERAL_RETRIES = 3
@@ -20,8 +19,8 @@ RETRY_DELAY = 5
 RATE_LIMIT_BASE_WAIT = 30
 
 # Chế độ
-TEST_MODE = False  # Set True nếu test 50 mã
-RESUME_FROM_TICKER = None  # Set 'AAA' nếu resume
+TEST_MODE = False
+RESUME_FROM_TICKER = None
 
 class Command(BaseCommand):
     help = 'Seed stocks & OHLCV data from 2020 (optimized for vnstock==3.2.6, full TA ready).'
@@ -202,7 +201,7 @@ class Command(BaseCommand):
                     if rows_added == 0:
                         raise ValueError("Không thêm row nào")
 
-                    if rows_added < 200:  # Warning nếu ít (mã listing muộn)
+                    if rows_added < 200:
                         low_data_count += 1
                         self.stdout.write(self.style.WARNING(f"    -> Data ít: {rows_added} rows cho {ticker}."))
 

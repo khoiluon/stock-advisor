@@ -160,12 +160,9 @@ class PotentialStock(models.Model):
                                  help_text="Khung thời gian gợi ý (Ngắn hạn, Trung hạn)")
     confidence = models.PositiveIntegerField(default=0, help_text="Độ tự tin của gợi ý (0-100%)")
     score = models.FloatField(default=0.0, help_text="Điểm số trên thang 10")
-
-    # Thay thế JSONField bằng TextField để tương thích rộng hơn và dễ dùng hơn.
-    # Chúng ta sẽ lưu danh sách các tag dưới dạng một chuỗi, ngăn cách bởi dấu phẩy.
-    # Ví dụ: "MA crossover bullish,Volume surge,Positive MACD"
+    stop_loss = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Giá stop loss dự kiến")
     key_reasons = models.TextField(default='', blank=True,
-                                   help_text="Danh sách các lý do chính, cách nhau bởi dấu phẩy")
+                                   help_text="Danh sách các lý do chính")
 
     # Trường này vẫn hữu ích để mô tả chiến lược tổng thể
     reason = models.TextField(default='', blank=True, help_text="Mô tả chi tiết chiến lược")
