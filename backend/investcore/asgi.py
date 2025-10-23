@@ -1,16 +1,18 @@
-"""
-ASGI config for investcore project.
-
-It exposes the ASGI callable as a module-level variable named ``application``.
-
-For more information on this file, see
-https://docs.djangoproject.com/en/5.2/howto/deployment/asgi/
-"""
+# stockadvisor/asgi.py (thay 'stockadvisor' bằng tên project của bạn)
 
 import os
-
+from channels.auth import AuthMiddlewareStack
+from channels.routing import ProtocolTypeRouter, URLRouter
 from django.core.asgi import get_asgi_application
+import ssi_integration.routing # Import file routing chúng ta sắp tạo
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'investcore.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'stockadvisor.settings')
 
-application = get_asgi_application()
+application = ProtocolTypeRouter({
+    "http": get_asgi_application(),
+    "websocket": AuthMiddlewareStack(
+        URLRouter(
+            ssi_integration.routing.websocket_urlpatterns
+        )
+    ),
+})

@@ -12,11 +12,13 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from decouple import config
 from pathlib import Path
 from celery.schedules import crontab
+import os
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
+load_dotenv(os.path.join(BASE_DIR, '.env'))
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -46,6 +48,8 @@ INSTALLED_APPS = [
 
     # App của dự án
     'api',
+
+    'ssi_integration',
 ]
 
 MIDDLEWARE = [
@@ -182,5 +186,27 @@ CELERY_BEAT_SCHEDULE = {
     'run-stock-analysis-daily': {
         'task': 'api.tasks.run_stock_analysis_task',
         'schedule': crontab(hour=18, minute=0, day_of_week='mon-fri'),
+    },
+}
+
+
+# ==============================================================================
+# CẤU HÌNH SSI FASTCONNECT DATA
+# ==============================================================================
+SSI_FCDATA_CONSUMER_ID = os.getenv('SSI_FCDATA_CONSUMER_ID')
+SSI_FCDATA_CONSUMER_SECRET = os.getenv('SSI_FCDATA_CONSUMER_SECRET')
+
+# URL mặc định từ tài liệu của SSI
+SSI_FCDATA_URL = 'https://fc-data.ssi.com.vn/'
+SSI_FCDATA_STREAM_URL = 'https://fc-datahub.ssi.com.vn/'
+
+ASGI_APPLICATION = 'investcore.asgi.application'
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [('127.0.0.1', 6379)],
+        },
     },
 }

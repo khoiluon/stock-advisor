@@ -104,3 +104,8 @@ class PotentialStockSerializer(serializers.ModelSerializer):
         if obj.key_reasons:
             return [reason.strip() for reason in obj.key_reasons.split(',')]
         return []
+
+class StockDataSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StockData
+        fields = ['date', 'open', 'high', 'low', 'close', 'volume']

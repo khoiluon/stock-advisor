@@ -1,16 +1,16 @@
-import React, { useState, useEffect } from 'react';
+// frontend/src/components/Dashboard.js
+
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import Modal from 'react-modal';
-import {
-  FiStar,
-  FiSliders,
-} from 'react-icons/fi';
+import { FiStar, FiSliders } from 'react-icons/fi';
 import { FaStar } from 'react-icons/fa';
 import StockChart from './StockChart';
 import LoadingSpinner from './LoadingSpinner';
 import toast from 'react-hot-toast';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import AsyncSelect from 'react-select/async';
+import useWebSocket, { ReadyState } from 'react-use-websocket';
 
 const customStyles = {
   control: (provided) => ({
@@ -21,7 +21,7 @@ const customStyles = {
     '&:hover': {
       borderColor: '#2563eb',
     },
-    minWidth: '250px', // Đảm bảo input đủ rộng
+    minWidth: '250px',
   }),
   menu: (provided) => ({
     ...provided,
@@ -54,16 +54,15 @@ const customStyles = {
 
 const loadOptions = (inputValue, callback) => {
   const token = localStorage.getItem('token');
-  if (!inputValue || inputValue.length < 2) { // Thêm điều kiện để không gọi API khi gõ ít ký tự
+  if (!inputValue || inputValue.length < 2) {
     callback([]);
     return;
   }
 
-  // URL cuối cùng, vừa sửa lỗi, vừa dùng biến môi trường
-  const searchUrl = `${process.env.REACT_APP_API_URL}/stocks/search/?q=${inputValue}`;
+  const searchUrl = `${process.env.REACT_APP_API_URL}/stocks/search/?q=${encodeURIComponent(inputValue)}`;
 
   axios.get(searchUrl, {
-    headers: { 'Authorization': `Token ${token}` }
+    headers: { Authorization: `Token ${token}` }
   }).then(res => {
     const options = res.data.map(stock => ({
       value: stock.ticker,
@@ -72,47 +71,141 @@ const loadOptions = (inputValue, callback) => {
     callback(options);
   }).catch(err => {
     console.error("Search API call failed:", err);
-    callback([]); // Trả về mảng rỗng nếu có lỗi
+    callback([]);
   });
 };
 
 const Dashboard = () => {
-  // State declarations grouped by functionality
+  // Basic states
   const [user, setUser] = useState('');
   const [error, setError] = useState('');
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [ticker, setTicker] = useState(searchParams.get('ticker') || 'VIC');
 
-  // Stock data states
+  // Stock states
   const [stockData, setStockData] = useState([]);
   const [stockInfo, setStockInfo] = useState({});
   const [isFavorite, setIsFavorite] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // main loading state
 
-  // Moving Average states - now supports multiple MA lines
+  // Indicators / MA lines
   const [maLines, setMaLines] = useState([]);
-
   const [indicators, setIndicators] = useState({
     rsi: { visible: false, period: 14 },
     macd: { visible: false, fast: 12, slow: 26, signal: 9 },
-    bbands: { visible: false, period: 20, std: 2 } // <-- State cho Bollinger Bands
+    bbands: { visible: false, period: 20, std: 2 }
   });
 
-  // Modal and indicators states
   const [isIndicatorModalOpen, setIsIndicatorModalOpen] = useState(false);
 
-  // Helper functions
+  // --- LOGIC CHỐNG RACE CONDITION NÂNG CAO ---
+  const isHistoryLoaded = useRef(false);
+  const pendingMessages = useRef([]);
+
+  // WebSocket URL and connection
+  const [socketUrl, setSocketUrl] = useState(null);
+  useEffect(() => {
+    if (ticker) {
+      setSocketUrl(`${process.env.REACT_APP_WS_URL || 'ws://127.0.0.1:8000'}/ws/stock/${ticker}/`);
+      // gate controlled when history finishes loading
+      isHistoryLoaded.current = false;
+    }
+  }, [ticker]);
+
+  const { lastMessage, readyState } = useWebSocket(socketUrl, {
+    shouldReconnect: () => true,
+  });
+
+  const connectionStatus = {
+    [ReadyState.CONNECTING]: 'Connecting',
+    [ReadyState.OPEN]: 'Open',
+    [ReadyState.CLOSING]: 'Closing',
+    [ReadyState.CLOSED]: 'Closed',
+    [ReadyState.UNINSTANTIATED]: 'Uninstantiated',
+  }[readyState];
+
+  // Hàm xử lý một tin nhắn real-time (tách riêng để tái sử dụng)
+  const processRealtimeMessage = (message) => {
+    if (!message || !message.data) return;
+
+    let parsed;
+    try {
+      parsed = JSON.parse(message.data);
+    } catch (e) {
+      console.error('Invalid realtime message JSON', e);
+      return;
+    }
+
+    if (parsed.DataType === 'B' && parsed.Content) {
+      let content;
+      try {
+        content = JSON.parse(parsed.Content);
+      } catch (e) {
+        console.error('Invalid Content JSON in realtime message', e);
+        return;
+      }
+
+      if (content.Symbol === ticker) {
+        const newCandleData = {
+          date: new Date().toISOString().split('T')[0],
+          open: parseFloat(content.Open),
+          high: parseFloat(content.High),
+          low: parseFloat(content.Low),
+          close: parseFloat(content.Close),
+          volume: parseInt(content.Volume, 10) || 0,
+        };
+
+        setStockData(prevData => {
+          // nếu prevData rỗng -> thêm nến đầu tiên
+          if (!prevData || prevData.length === 0) return [newCandleData];
+
+          // **LOGIC SỬA LỖI CỐT LÕI**
+          // Luôn đảm bảo mảng hiện tại được sắp xếp trước khi thao tác
+          const sortedPrevData = [...prevData].sort((a, b) => new Date(a.date) - new Date(b.date));
+          const lastDataPoint = sortedPrevData[sortedPrevData.length - 1];
+
+          if (lastDataPoint.date === newCandleData.date) {
+            const updatedLastPoint = {
+              ...lastDataPoint,
+              high: Math.max(lastDataPoint.high, newCandleData.high),
+              low: Math.min(lastDataPoint.low, newCandleData.low),
+              close: newCandleData.close,
+              volume: (lastDataPoint.volume || 0) + (newCandleData.volume || 0),
+            };
+            return [...sortedPrevData.slice(0, -1), updatedLastPoint];
+          } else if (new Date(newCandleData.date) > new Date(lastDataPoint.date)) {
+            // Chỉ thêm nến mới nếu nó thực sự mới hơn
+            return [...sortedPrevData, newCandleData];
+          }
+          // Nếu nến mới cũ hơn hoặc cùng ngày không phù hợp => bỏ qua
+          return sortedPrevData;
+        });
+      }
+    }
+  };
+
+  // useEffect xử lý tin nhắn real-time
+  useEffect(() => {
+    if (lastMessage === null) return;
+    // phụ thuộc ticker để đảm bảo xử lý đúng mã hiện tại
+    if (isHistoryLoaded.current) {
+      processRealtimeMessage(lastMessage);
+    } else {
+      // đẩy tin nhắn vào hàng đợi
+      pendingMessages.current.push(lastMessage);
+    }
+  }, [lastMessage, ticker]);
+
+  // Helper: MA lines
   const addMaLine = () => {
-    const newId = Date.now(); // Simple unique ID
+    const newId = Date.now();
     setMaLines(prev => [...prev, { id: newId, period: 20 }]);
   };
 
   const updateMaLine = (id, period) => {
     setMaLines(prev =>
-      prev.map(line =>
-        line.id === id ? { ...line, period: Number(period) } : line
-      )
+      prev.map(line => (line.id === id ? { ...line, period: Number(period) } : line))
     );
   };
 
@@ -120,13 +213,13 @@ const Dashboard = () => {
     setMaLines(prev => prev.filter(line => line.id !== id));
   };
 
+  // Favorite handler
   const handleToggleFavorite = async () => {
     const token = localStorage.getItem('token');
     if (!token) return;
 
     try {
       if (!isFavorite) {
-        // Add to favorites
         await axios.post(
           `${process.env.REACT_APP_API_URL}/watchlist/`,
           { stock_id: stockInfo.ticker || ticker },
@@ -135,12 +228,11 @@ const Dashboard = () => {
         setIsFavorite(true);
         toast.success(`${stockInfo.ticker || ticker} was added to your favorites!`);
       } else {
-        // Remove from favorites
         const res = await axios.get(`${process.env.REACT_APP_API_URL}/watchlist/`, {
           headers: { Authorization: `Token ${token}` },
         });
         const favItem = res.data.find(
-          (fav) => fav.stock.ticker === (stockInfo.ticker || ticker)
+          (fav) => (fav.stock && fav.stock.ticker) === (stockInfo.ticker || ticker)
         );
 
         if (favItem) {
@@ -153,6 +245,7 @@ const Dashboard = () => {
         }
       }
     } catch (err) {
+      console.error('Failed to update favorites:', err);
       toast.error(`Failed to update favorites. Please try again.`);
     }
   };
@@ -162,74 +255,91 @@ const Dashboard = () => {
     window.location.href = '/login';
   };
 
-  // Effects
+  // set username from localStorage
   useEffect(() => {
     setUser(localStorage.getItem('username') || 'User');
   }, []);
 
+  // check favorite status
   useEffect(() => {
     const checkFavorite = async () => {
       const token = localStorage.getItem('token');
       if (!token) return;
 
       try {
-        const res = await axios.get('http://127.0.0.1:8000/api/watchlist/', {
-          headers: { 'Authorization': `Token ${token}` }
+        const res = await axios.get(`${process.env.REACT_APP_API_URL}/watchlist/`, {
+          headers: { Authorization: `Token ${token}` }
         });
         setIsFavorite(
-          res.data.some(fav => fav.stock.ticker === (stockInfo.ticker || ticker))
+          res.data.some(fav => (fav.stock && fav.stock.ticker) === (stockInfo.ticker || ticker))
         );
-      } catch (error) {
-        console.error('Failed to check favorite status:', error);
+      } catch (err) {
+        console.error('Failed to check favorite status:', err);
       }
     };
     checkFavorite();
   }, [stockInfo, ticker]);
 
+  // Fetch historical data + stock info (mới: setStockData([]) trước fetch; xử lý hàng đợi)
   useEffect(() => {
+    // Đóng cổng và xóa hàng đợi mỗi khi đổi ticker
+    isHistoryLoaded.current = false;
+    pendingMessages.current = [];
+
     const fetchData = async () => {
+      setIsLoading(true);
+      setError('');
+      setStockData([]);
+
       const token = localStorage.getItem('token');
       if (!token) {
         setError('You are not logged in.');
+        setIsLoading(false);
         return;
       }
 
-      setIsLoading(true); // <-- Bật loading
-      setError('');
-      // setStockData([]); // Có thể bỏ reset này để tránh màn hình bị giật trắng
-
       try {
-        // Get stock data (price, volume, etc)
-        const stockRes = await axios.get(
-          `${process.env.REACT_APP_API_URL}/stock-data/?ticker=${ticker}`,
-          { headers: { Authorization: `Token ${token}` } }
-        );
-        setStockData(stockRes.data);
+        // Gọi song song để nhanh hơn
+        const [stockRes, infoRes] = await Promise.all([
+          axios.get(`${process.env.REACT_APP_API_URL}/stock-data/?ticker=${ticker}`, { headers: { Authorization: `Token ${token}` } }),
+          axios.get(`${process.env.REACT_APP_API_URL}/stocks/${ticker}/`, { headers: { Authorization: `Token ${token}` } })
+        ]);
 
-        // Get stock info (company name, exchange, industry)
-        const infoRes = await axios.get(
-          `${process.env.REACT_APP_API_URL}/stocks/${ticker}/`,
-          { headers: { Authorization: `Token ${token}` } }
-        );
-        setStockInfo(infoRes.data);
+        if (stockRes.data && stockRes.data.length > 0) {
+          // **NƠI DUY NHẤT ĐỂ SẮP XẾP DỮ LIỆU LỊCH SỬ**
+          const sortedData = stockRes.data.sort((a, b) => new Date(a.date) - new Date(b.date));
+          setStockData(sortedData);
+          setStockInfo(infoRes.data || {});
+          // MỞ CỔNG VÀ XỬ LÝ HÀNG ĐỢI
+          isHistoryLoaded.current = true;
+          pendingMessages.current.forEach(msg => processRealtimeMessage(msg));
+          pendingMessages.current = [];
+        } else {
+          // Không có dữ liệu lịch sử - vẫn set stockInfo nếu có
+          setStockData([]);
+          setStockInfo(infoRes?.data || {});
+          setError(`No historical data found for ${ticker}.`);
+          // Vẫn mở cổng để nhận real-time (tuỳ chọn)
+          isHistoryLoaded.current = true;
+          pendingMessages.current.forEach(msg => processRealtimeMessage(msg));
+          pendingMessages.current = [];
+        }
       } catch (err) {
-        setError(
-          err.response ? err.response.data.error : 'Cannot connect to server.'
-        );
+        setError(err.response ? (err.response.data.error || JSON.stringify(err.response.data)) : 'Cannot connect to server.');
         setStockData([]);
         setStockInfo({});
+        isHistoryLoaded.current = false;
       } finally {
         setIsLoading(false);
       }
     };
+
     fetchData();
   }, [ticker]);
 
   return (
     <div>
-      {/* Main Content */}
       <main className="px-10 py-8">
-        {/* ==================== HEADER CHÍNH ==================== */}
         <div className="flex justify-between items-center mb-4">
           <div>
             <h1 className="text-3xl font-bold text-white">Market Dashboard</h1>
@@ -245,7 +355,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* ==================== THANH ĐIỀU KHIỂN MỚI ==================== */}
         <div className="bg-[#1a2332] p-4 rounded-xl mb-8 flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <label className="text-gray-300 font-semibold shrink-0">Stock Ticker:</label>
@@ -271,18 +380,16 @@ const Dashboard = () => {
             >
               <FiSliders className="mr-2" /> Technical Indicators
             </button>
+            <div className="text-sm text-gray-400">WS: {connectionStatus}</div>
           </div>
         </div>
 
-        {/* ==================== ERROR MESSAGE ==================== */}
         {error && (
           <div className="bg-red-900/20 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg mb-6">
             {error}
           </div>
         )}
 
-        {/* ==================== NỘI DUNG CHÍNH ==================== */}
-        {/* Stock Card - Basic Info */}
         <div className="bg-[#232e43] rounded-xl shadow-lg p-8 flex flex-col md:flex-row items-center justify-between mb-8">
           <div className="flex-1">
             <div className="flex items-center mb-2">
@@ -325,28 +432,26 @@ const Dashboard = () => {
               </div>
             </div>
           </div>
-
-          {/* <div className="text-gray-400">No stock data available</div> */}
         </div>
 
         {/* Chart */}
-        <div className="bg-[#232e43] rounded-xl shadow-lg p-8">
-          <div className="text-white font-bold mb-4 text-lg">
-            Stock Price Chart with Technical Indicators
-          </div>
+        <div className="bg-[#232e43] rounded-xl shadow-lg p-8 min-h-[480px]">
+          <div className="text-white font-bold mb-4 text-lg">Stock Price Chart with Technical Indicators</div>
 
-          {/* LOADING + ERROR HANDLING */}
           {isLoading ? (
             <LoadingSpinner message={`Fetching data for ${ticker}...`} />
           ) : error ? (
             <div className="text-red-400 text-center py-10">{error}</div>
           ) : (
-            <StockChart data={stockData} maLines={maLines} indicators={indicators} />
+            stockData.length > 0 ? (
+              <StockChart data={stockData} ticker={ticker} maLines={maLines} indicators={indicators} />
+            ) : (
+              <div className="text-gray-400 text-center py-10">No data to display.</div>
+            )
           )}
         </div>
       </main>
 
-      {/* Modal chọn indicator */}
       <Modal
         isOpen={isIndicatorModalOpen}
         onRequestClose={() => setIsIndicatorModalOpen(false)}
@@ -355,7 +460,6 @@ const Dashboard = () => {
       >
         <h2 className="text-xl font-bold mb-4">Select Indicators</h2>
 
-        {/* === Moving Average Section === */}
         <div className="mb-4">
           <div className="flex items-center justify-between mb-2">
             <span className="font-semibold">Moving Average (MA)</span>
@@ -397,7 +501,6 @@ const Dashboard = () => {
           )}
         </div>
 
-        {/* === Bollinger Bands Section === */}
         <div className="mb-4 border-t border-gray-700 pt-4 mt-4">
           <div className="flex items-center justify-between mb-2">
             <span className="font-semibold">Bollinger Bands (BBands)</span>
@@ -454,7 +557,6 @@ const Dashboard = () => {
           )}
         </div>
 
-        {/* === MACD Section === */}
         <div className="mb-4 border-t border-gray-700 pt-4 mt-4">
           <div className="flex items-center justify-between mb-2">
             <span className="font-semibold">MACD (Moving Average Convergence Divergence)</span>
@@ -521,7 +623,6 @@ const Dashboard = () => {
           )}
         </div>
 
-        {/* === RSI Section === */}
         <div className="mb-4 border-t border-gray-700 pt-4 mt-4">
           <div className="flex items-center justify-between mb-2">
             <span className="font-semibold">Relative Strength Index (RSI)</span>
@@ -564,7 +665,6 @@ const Dashboard = () => {
           )}
         </div>
 
-        {/* === Close Button === */}
         <div className="mt-4 flex justify-end">
           <button
             className="bg-yellow-500 px-4 py-2 rounded-lg hover:bg-yellow-600"
