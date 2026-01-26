@@ -178,18 +178,19 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'api.tasks.crawl_news_task',
         'schedule': 1800.0,  # 30 phút
     },
-    'fetch-daily-data-after-market-close': {
-        'task': 'api.tasks.fetch_daily_data_vnstock_task',
-        'schedule': crontab(hour=17, minute=0, day_of_week='mon-fri'),
-        'options': {'expires': 3600},
-    },
-    'run-stock-analysis-daily': {
-        'task': 'api.tasks.run_stock_analysis_task',
-        'schedule': crontab(hour=18, minute=0, day_of_week='mon-fri'),
-    },
+    # 'fetch-daily-data-after-market-close': {
+    #     'task': 'api.tasks.fetch_daily_data_vnstock_task',
+    #     'schedule': crontab(hour=17, minute=0, day_of_week='mon-fri'),
+    #     'options': {'expires': 3600},
+    # },
+    # 'run-stock-analysis-daily': {
+    #     'task': 'api.tasks.run_stock_analysis_task',
+    #     'schedule': crontab(hour=18, minute=0, day_of_week='mon-fri'),
+    # },
 }
 
-
+# ===================AI===========================
+GEMINI_API_KEY = 'AIzaSyDN4BrwKCF0T7CwgZlD30KoOP9m2LTxweg'
 # ==============================================================================
 # CẤU HÌNH SSI FASTCONNECT DATA
 # ==============================================================================

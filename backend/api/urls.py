@@ -6,7 +6,8 @@ from .views import (RegisterAPIView,
                     WatchlistDeleteView,
                     ArticleListAPIView,
                     StockScreenerAPIView,
-                    StockSearchAPIView)
+                    StockSearchAPIView,
+                    ChatbotView)
 from rest_framework.routers import DefaultRouter
 from rest_framework.authtoken.views import obtain_auth_token
 
@@ -29,5 +30,7 @@ urlpatterns = [
     path('news/', ArticleListAPIView.as_view(), name='news-list'),
 
     path('screener/', StockScreenerAPIView.as_view(), name='stock-screener'),
+
+    path('chat/', ChatbotView.as_view(), name='chatbot'),
 
 ]

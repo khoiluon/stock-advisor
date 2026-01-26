@@ -1,6 +1,6 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers, validators
-from .models import Stock, Watchlist, StockData, Alert, PotentialStock, Article
+from .models import Stock, Watchlist, StockData, Alert, PotentialStock, Article, ChatSession, ChatMessage
 
 class RegisterSerializer(serializers.ModelSerializer):
     class Meta:
@@ -109,3 +109,16 @@ class StockDataSerializer(serializers.ModelSerializer):
     class Meta:
         model = StockData
         fields = ['date', 'open', 'high', 'low', 'close', 'volume']
+
+class ChatMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChatMessage
+        fields = ['id', 'sender', 'content', 'timestamp']
+
+class ChatSessionSerializer(serializers.ModelSerializer):
+    messages = ChatMessageSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = ChatSession
+        fields = ['id', 'user', 'created_at', 'updated_at', 'messages']
+        read_only_fields = ['user']

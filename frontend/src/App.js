@@ -9,8 +9,15 @@ import FinancialNews from './components/FinancialNews';
 import Layout from './components/Layout';
 import ScreenerPage from './components/ScreenerPage';
 import { Toaster } from 'react-hot-toast';
+import { FaComments } from 'react-icons/fa';
+import ChatbotWindow from './components/ChatbotWindow';
+import React, { useState } from 'react';
 
 function App() {
+    const [isChatOpen, setChatOpen] = useState(false);
+    const toggleChat = () => {
+        setChatOpen(prev => !prev);
+    };
     // const [dark, setDark] = useState(true);
     // useEffect(() => {
     //     document.documentElement.classList.toggle('dark', dark);
@@ -61,6 +68,14 @@ function App() {
                     <Route path="/screener" element={<ScreenerPage />} />
                 </Route>
             </Routes>
+            <div className="chat-icon" onClick={toggleChat}>
+                <FaComments size={28} color="white" />
+            </div>
+
+            {/* 2. Cửa sổ chat, chỉ hiển thị khi isChatOpen là true */}
+            <div className={`chat-window-container ${isChatOpen ? 'open' : ''}`}>
+                <ChatbotWindow />
+            </div>
         </Router>
     );
 }
