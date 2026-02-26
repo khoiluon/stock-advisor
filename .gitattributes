@@ -1,0 +1,5 @@
+# Giữ LF cho shell scripts (chạy trong Linux Docker container)
+*.sh text eol=lf
+
+# Dockerfile giữ LF cho an toàn
+Dockerfile text eol=lf

@@ -46,7 +46,7 @@ class Stock(models.Model):
         OTHER = 'OTHER', 'Khác'
 
     ticker = models.CharField(max_length=20, unique=True, primary_key=True)
-    company_name = models.CharField(max_length=255)
+    company_name = models.CharField(max_length=255, null=True, blank=True)
     exchange = models.CharField(
         max_length=10,
         choices=ExchangeChoices.choices,

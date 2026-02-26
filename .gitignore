@@ -21,6 +21,7 @@ Thumbs.db
 # === Environment Files ===
 .env
 .env.*
+!.env.example
 
 
 # === Tailwind generated files (optional, nếu có build) ===

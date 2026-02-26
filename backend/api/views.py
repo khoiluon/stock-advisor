@@ -8,10 +8,10 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 import pandas as pd
-import pandas_ta as ta
+# import pandas_ta as ta
 from rest_framework import permissions
 from django.conf import settings
-import google.generativeai as genai
+# import google.generativeai as genai
 from .models import Stock, StockData, Watchlist, PotentialStock, Article, ChatSession, ChatMessage
 from .pagination import StandardResultsSetPagination
 from .serializers import (
@@ -153,9 +153,9 @@ class StockDataAPIView(APIView):
 
             # BƯỚC 4: Tính toán các chỉ báo kỹ thuật bằng pandas_ta
             # Thư viện này tự động tìm các cột 'open', 'high', 'low', 'close', 'volume'
-            df.ta.macd(fast=12, slow=26, signal=9, append=True)
-            df.ta.rsi(length=14, append=True)
-            df.ta.bbands(length=20, std=2, append=True)
+            # df.ta.macd(fast=12, slow=26, signal=9, append=True)
+            # df.ta.rsi(length=14, append=True)
+            # df.ta.bbands(length=20, std=2, append=True)
             # Bạn có thể thêm các chỉ báo khác ở đây, ví dụ:
             # df.ta.sma(length=20, append=True)
             # df.ta.sma(length=50, append=True)
@@ -176,93 +176,93 @@ class StockDataAPIView(APIView):
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class ChatbotView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request):
-        user = request.user
-        user_message_content = request.data.get('message')
-        session_id = request.data.get('session_id')
-
-        if not user_message_content:
-            return Response({"error": "Message is required."}, status=status.HTTP_400_BAD_REQUEST)
-
-        chat_session = None
-        if session_id:
-            try:
-                chat_session = ChatSession.objects.get(id=session_id, user=user)
-            except ChatSession.DoesNotExist:
-                # Nếu không tìm thấy session, tạo một session mới
-                chat_session = ChatSession.objects.create(user=user)
-        else:
-            chat_session = ChatSession.objects.create(user=user)
-
-        ChatMessage.objects.create(session=chat_session, sender='user', content=user_message_content)
-
-        try:
-            genai.configure(api_key='AIzaSyDN4BrwKCF0T7CwgZlD30KoOP9m2LTxweg')
-            client = genai.GenerativeModel('gemini-2.5-flash')
-
-            system_instruction = self.get_system_instruction(user_message_content)
-
-            full_history = [
-                {'role': 'user', 'parts': [{'text': system_instruction}]},
-                {'role': 'model',
-                 'parts': [{'text': "Tôi đã hiểu. Tôi là Trợ lý Phân tích Chứng khoán và sẵn sàng hỗ trợ."}]}
-            ]
-
-            # Lấy lịch sử trò chuyện từ DB và nối vào sau
-            conversation_history = ChatMessage.objects.filter(session=chat_session).order_by('timestamp')
-            for msg in conversation_history:
-                role = 'user' if msg.sender == 'user' else 'model'
-                full_history.append({'role': role, 'parts': [{'text': msg.content}]})
-
-            # Gọi API với cú pháp đúng
-            response = client.generate_content(
-                contents=full_history  # Truyền toàn bộ lịch sử đã gộp
-            )
-            ai_response_content = response.text
-
-            ChatMessage.objects.create(session=chat_session, sender='ai', content=ai_response_content)
-
-            updated_session = ChatSession.objects.get(id=chat_session.id)
-            session_serializer = ChatSessionSerializer(updated_session)
-            return Response(session_serializer.data, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            error_details = f"Lỗi từ Generative AI: {repr(e)}"
-            print(f"!!! LỖI NGOẠI LỆ TRONG CHATBOT VIEW: {error_details}")
-            return Response({"error": "Xin lỗi, đã có lỗi xảy ra phía máy chủ."},
-                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    def get_system_instruction(self, user_message):
-        all_tickers = list(Stock.objects.values_list('ticker', flat=True))
-        mentioned_tickers = [ticker for ticker in all_tickers if
-                             re.search(r'\b' + re.escape(ticker) + r'\b', user_message.upper())]
-
-        context_data = ""
-        if mentioned_tickers:
-            ticker = mentioned_tickers[0]
-            context_data += f"\nDữ liệu ngữ cảnh cho mã {ticker}:\n"
-
-            latest_data = StockData.objects.filter(stock__ticker=ticker).order_by('-date').first()
-            if latest_data:
-                context_data += f"- Giá đóng cửa gần nhất ({latest_data.date}): {latest_data.close}\n"
-
-            suggestion = PotentialStock.objects.filter(stock__ticker=ticker).order_by('-analysis_date').first()
-            if suggestion:
-                context_data += f"- Gợi ý từ hệ thống ADMRS: {suggestion.reason} (Timeframe: {suggestion.timeframe}, Score: {suggestion.score}/10, Confidence: {suggestion.confidence}%)\n"
-
-        # === SỬA LỖI CÚ PHÁP: ĐẢM BẢO RETURN LÀ MỘT CHUỖI F-STRING HOÀN CHỈNH ===
-        return f"""
-        Bạn là một Trợ lý Phân tích Chứng khoán AI của hệ thống Stock Advisor.
-        Vai trò của bạn: Cung cấp thông tin, phân tích và trả lời các câu hỏi về cổ phiếu một cách khách quan, dựa trên dữ liệu.
-
-        QUY TẮC BẮT BUỘC:
-        1.  Chỉ trả lời các câu hỏi liên quan đến chứng khoán, tài chính, cổ phiếu. Nếu người dùng hỏi lạc đề, hãy lịch sự từ chối.
-        2.  Khi đưa ra thông tin, hãy dựa vào "Dữ liệu ngữ cảnh" được cung cấp dưới đây nếu có.
-        3.  Không bao giờ đưa ra lời khuyên "mua" hay "bán" một cách chắc chắn. Luôn sử dụng các cụm từ như "theo phân tích của hệ thống", "dữ liệu cho thấy", "bạn nên cân nhắc thêm các yếu tố khác".
-        4.  Giữ câu trả lời ngắn gọn, chuyên nghiệp và đi thẳng vào vấn đề.
-    
-        {context_data}
-        """
+# class ChatbotView(APIView):
+#     permission_classes = [permissions.IsAuthenticated]
+#
+#     def post(self, request):
+#         user = request.user
+#         user_message_content = request.data.get('message')
+#         session_id = request.data.get('session_id')
+#
+#         if not user_message_content:
+#             return Response({"error": "Message is required."}, status=status.HTTP_400_BAD_REQUEST)
+#
+#         chat_session = None
+#         if session_id:
+#             try:
+#                 chat_session = ChatSession.objects.get(id=session_id, user=user)
+#             except ChatSession.DoesNotExist:
+#                 # Nếu không tìm thấy session, tạo một session mới
+#                 chat_session = ChatSession.objects.create(user=user)
+#         else:
+#             chat_session = ChatSession.objects.create(user=user)
+#
+#         ChatMessage.objects.create(session=chat_session, sender='user', content=user_message_content)
+#
+#         try:
+#             genai.configure(api_key='AIzaSyDN4BrwKCF0T7CwgZlD30KoOP9m2LTxweg')
+#             client = genai.GenerativeModel('gemini-2.5-flash')
+#
+#             system_instruction = self.get_system_instruction(user_message_content)
+#
+#             full_history = [
+#                 {'role': 'user', 'parts': [{'text': system_instruction}]},
+#                 {'role': 'model',
+#                  'parts': [{'text': "Tôi đã hiểu. Tôi là Trợ lý Phân tích Chứng khoán và sẵn sàng hỗ trợ."}]}
+#             ]
+#
+#             # Lấy lịch sử trò chuyện từ DB và nối vào sau
+#             conversation_history = ChatMessage.objects.filter(session=chat_session).order_by('timestamp')
+#             for msg in conversation_history:
+#                 role = 'user' if msg.sender == 'user' else 'model'
+#                 full_history.append({'role': role, 'parts': [{'text': msg.content}]})
+#
+#             # Gọi API với cú pháp đúng
+#             response = client.generate_content(
+#                 contents=full_history  # Truyền toàn bộ lịch sử đã gộp
+#             )
+#             ai_response_content = response.text
+#
+#             ChatMessage.objects.create(session=chat_session, sender='ai', content=ai_response_content)
+#
+#             updated_session = ChatSession.objects.get(id=chat_session.id)
+#             session_serializer = ChatSessionSerializer(updated_session)
+#             return Response(session_serializer.data, status=status.HTTP_200_OK)
+#
+#         except Exception as e:
+#             error_details = f"Lỗi từ Generative AI: {repr(e)}"
+#             print(f"!!! LỖI NGOẠI LỆ TRONG CHATBOT VIEW: {error_details}")
+#             return Response({"error": "Xin lỗi, đã có lỗi xảy ra phía máy chủ."},
+#                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+#
+#     def get_system_instruction(self, user_message):
+#         all_tickers = list(Stock.objects.values_list('ticker', flat=True))
+#         mentioned_tickers = [ticker for ticker in all_tickers if
+#                              re.search(r'\b' + re.escape(ticker) + r'\b', user_message.upper())]
+#
+#         context_data = ""
+#         if mentioned_tickers:
+#             ticker = mentioned_tickers[0]
+#             context_data += f"\nDữ liệu ngữ cảnh cho mã {ticker}:\n"
+#
+#             latest_data = StockData.objects.filter(stock__ticker=ticker).order_by('-date').first()
+#             if latest_data:
+#                 context_data += f"- Giá đóng cửa gần nhất ({latest_data.date}): {latest_data.close}\n"
+#
+#             suggestion = PotentialStock.objects.filter(stock__ticker=ticker).order_by('-analysis_date').first()
+#             if suggestion:
+#                 context_data += f"- Gợi ý từ hệ thống ADMRS: {suggestion.reason} (Timeframe: {suggestion.timeframe}, Score: {suggestion.score}/10, Confidence: {suggestion.confidence}%)\n"
+#
+#         # === SỬA LỖI CÚ PHÁP: ĐẢM BẢO RETURN LÀ MỘT CHUỖI F-STRING HOÀN CHỈNH ===
+#         return f"""
+#         Bạn là một Trợ lý Phân tích Chứng khoán AI của hệ thống Stock Advisor.
+#         Vai trò của bạn: Cung cấp thông tin, phân tích và trả lời các câu hỏi về cổ phiếu một cách khách quan, dựa trên dữ liệu.
+#
+#         QUY TẮC BẮT BUỘC:
+#         1.  Chỉ trả lời các câu hỏi liên quan đến chứng khoán, tài chính, cổ phiếu. Nếu người dùng hỏi lạc đề, hãy lịch sự từ chối.
+#         2.  Khi đưa ra thông tin, hãy dựa vào "Dữ liệu ngữ cảnh" được cung cấp dưới đây nếu có.
+#         3.  Không bao giờ đưa ra lời khuyên "mua" hay "bán" một cách chắc chắn. Luôn sử dụng các cụm từ như "theo phân tích của hệ thống", "dữ liệu cho thấy", "bạn nên cân nhắc thêm các yếu tố khác".
+#         4.  Giữ câu trả lời ngắn gọn, chuyên nghiệp và đi thẳng vào vấn đề.
+#
+#         {context_data}
+#         """

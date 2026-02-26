@@ -13,12 +13,20 @@ from decouple import config
 from pathlib import Path
 from celery.schedules import crontab
 import os
-from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-load_dotenv(os.path.join(BASE_DIR, '.env'))
+# Helper: ưu tiên biến môi trường (Docker Compose) > .env file (local dev)
+def env(key, default=None, cast=str):
+    """Read from os.environ first (Docker), then .env file (decouple)."""
+    val = os.environ.get(key)
+    if val is not None:
+        return cast(val) if cast != str else val
+    try:
+        return config(key, default=default, cast=cast)
+    except Exception:
+        return default
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -26,12 +34,13 @@ SECRET_KEY = config('SECRET_KEY')
 
 DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,backend,0.0.0.0').split(',')
 
 
 # Application definition
 
 INSTALLED_APPS = [
+    'channels',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -91,11 +100,11 @@ WSGI_APPLICATION = 'investcore.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': config('DB_NAME'),
-        'USER': config('DB_USER'),
-        'PASSWORD': config('DB_PASSWORD'),
-        'HOST': config('DB_HOST'),
-        'PORT': config('DB_PORT'),
+        'NAME': env('DB_NAME', default='stock_advisor_db'),
+        'USER': env('DB_USER', default='root'),
+        'PASSWORD': env('DB_PASSWORD', default=''),
+        'HOST': env('DB_HOST', default='localhost'),
+        'PORT': env('DB_PORT', default='3306'),
     }
 }
 
@@ -121,6 +130,14 @@ AUTH_PASSWORD_VALIDATORS = [
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://frontend:3000",
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
 ]
 
 # CẤU HÌNH CHO DJANGO REST FRAMEWORK
@@ -160,14 +177,14 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # ==============================================================================
 # CELERY SETTINGS
 # ==============================================================================
-CELERY_BROKER_URL = config('REDIS_URL')
-CELERY_RESULT_BACKEND = config('REDIS_URL')
+CELERY_BROKER_URL = env('REDIS_URL', default='redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = env('REDIS_URL', default='redis://localhost:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Asia/Ho_Chi_Minh' # Đặt múi giờ Việt Nam
-CELERY_TASK_ALWAYS_EAGER = True
-CELERY_TASK_EAGER_PROPAGATES = True
+CELERY_TASK_ALWAYS_EAGER = config('CELERY_TASK_ALWAYS_EAGER', default=False, cast=bool)
+CELERY_TASK_EAGER_PROPAGATES = config('CELERY_TASK_ALWAYS_EAGER', default=False, cast=bool)
 
 # Cấu hình cho Celery Beat
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
@@ -190,7 +207,7 @@ CELERY_BEAT_SCHEDULE = {
 }
 
 # ===================AI===========================
-GEMINI_API_KEY = 'AIzaSyDN4BrwKCF0T7CwgZlD30KoOP9m2LTxweg'
+GEMINI_API_KEY = config('GEMINI_API_KEY', default='')
 # ==============================================================================
 # CẤU HÌNH SSI FASTCONNECT DATA
 # ==============================================================================
@@ -203,11 +220,14 @@ SSI_FCDATA_STREAM_URL = 'https://fc-datahub.ssi.com.vn/'
 
 ASGI_APPLICATION = 'investcore.asgi.application'
 
+# CHANNEL_REDIS_HOST: 'redis' trong Docker, '127.0.0.1' khi chạy local
+_CHANNEL_REDIS_HOST = os.getenv('CHANNEL_REDIS_HOST', '127.0.0.1')
+
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            "hosts": [('127.0.0.1', 6379)],
+            "hosts": [(_CHANNEL_REDIS_HOST, 6379)],
         },
     },
 }
