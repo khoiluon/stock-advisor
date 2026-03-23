@@ -5,7 +5,7 @@
 # Để chạy Production, xem hướng dẫn bên dưới
 
 # === DEVELOPMENT MODE (default) ===
-FROM node:18-alpine
+FROM node:25-alpine
 
 WORKDIR /app
 
@@ -18,17 +18,19 @@ RUN npm install
 # Copy source code
 COPY . .
 
-EXPOSE 3000
+EXPOSE 5173
 
-# Biến môi trường cho hot-reload trong Docker
-ENV CHOKIDAR_USEPOLLING=true
-ENV WATCHPACK_POLLING=true
 
-CMD ["npm", "start"]
+CMD ["npm", "run", "dev"]
 
 # ============================================================
 # PRODUCTION MODE (uncomment khi cần deploy)
 # ============================================================
+#
+# WARNING: CÁC ĐOẠN CODE DƯỚI ĐÂY KHÔNG CÒN ĐÚNG!
+# Dự án đã thay đổi từ react-scripts sang vite, vậy nên các
+# đoạn code dưới đây không còn đúng nữa! Cần cập nhật lại
+#
 # Sử dụng multi-stage build: build React → serve bằng Nginx
 #
 # --- Stage 1: Build ---
