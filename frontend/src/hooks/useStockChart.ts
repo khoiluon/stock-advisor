@@ -61,7 +61,14 @@ function calculateMACD(
 	}));
 }
 
-export function useStockChart({
+/**
+ * Hook quản lý logic khởi tạo và điều khiển biểu đồ chứng khoán
+ * * @description
+ * - Khởi tạo thực thể biểu đồ và quản lý vòng đời (mount/unmount).
+ * - Xử lý tính toán và hiển thị các lớp dữ liệu (Candlestick, Volume) và chỉ báo kỹ thuật (MA, MACD, RSI, BBands).
+ * - Tự động cập nhật giao diện biểu đồ khi dữ liệu hoặc cấu hình chỉ báo thay đổi.
+ */
+export default function useStockChart({
 	data,
 	ticker,
 	maLines,

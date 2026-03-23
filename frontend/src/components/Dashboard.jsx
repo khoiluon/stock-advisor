@@ -1,7 +1,5 @@
-// frontend/src/components/Dashboard.js
-
 import axios from "axios";
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { FaStar } from "react-icons/fa";
 import { FiSliders, FiStar } from "react-icons/fi";

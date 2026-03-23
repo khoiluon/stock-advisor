@@ -1,17 +1,19 @@
-import { useStockChart } from "../hooks/use-stock-chart";
-import { Indicators, MALine, StockDataPoint } from "../types/Stock";
+import useStockChart from "@/hooks/use-stock-chart";
+import type { Indicators, MALine, StockDataPoint } from "../types/Stock";
 
-const StockChart = ({
-	data,
-	ticker,
-	maLines,
-	indicators,
-}: {
+interface StockChartProps {
 	data: StockDataPoint[];
 	ticker: string;
 	maLines: MALine[];
 	indicators: Indicators;
-}) => {
+}
+
+export default function StockChart({
+	data,
+	ticker,
+	maLines,
+	indicators,
+}: StockChartProps) {
 	const chartContainerRef = useStockChart({
 		data,
 		ticker,
@@ -20,15 +22,8 @@ const StockChart = ({
 	});
 
 	return (
-		<div
-			style={{ width: "100%", maxWidth: 1200, margin: "0 auto", height: 400 }}
-		>
-			<div
-				ref={chartContainerRef}
-				style={{ position: "relative", width: "100%", height: 400 }}
-			/>
+		<div className="w-full h-[400px] max-w-7xl mx-auto">
+			<div ref={chartContainerRef} className="relative w-full h-[400px]" />
 		</div>
 	);
-};
-
-export default StockChart;
+}
