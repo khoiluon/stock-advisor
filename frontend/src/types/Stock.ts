@@ -1,3 +1,10 @@
+export type StockInfo = {
+	ticker: string;
+	company_name: string;
+	exchange: string;
+	industry: string | null;
+};
+
 /**
  * Định nghĩa cho một điểm dữ liệu lịch sử giá của cổ phiếu.
  * Bao gồm giá OHLC, khối lượng và có thể chứa các giá trị chỉ báo đã được tính
@@ -49,7 +56,7 @@ export type MALine = {
 /**
  * Object chứa cấu hình của tất cả các chỉ báo
  */
-export type Indicators = {
+export type IndicatorSettings = {
 	rsi: {
 		visible: boolean;
 		period: number;

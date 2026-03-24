@@ -1,11 +1,11 @@
-import useStockChart from "@/hooks/use-stock-chart";
-import type { Indicators, MALine, StockDataPoint } from "../types/Stock";
+import useStockChart from "@/hooks/useStockChart";
+import type { IndicatorSettings, MALine, StockDataPoint } from "../types/Stock";
 
 interface StockChartProps {
 	data: StockDataPoint[];
 	ticker: string;
 	maLines: MALine[];
-	indicators: Indicators;
+	indicators: IndicatorSettings;
 }
 
 export default function StockChart({
@@ -22,8 +22,8 @@ export default function StockChart({
 	});
 
 	return (
-		<div className="w-full h-[400px] max-w-7xl mx-auto">
-			<div ref={chartContainerRef} className="relative w-full h-[400px]" />
+		<div className="w-full h-100 max-w-7xl mx-auto">
+			<div ref={chartContainerRef} className="relative w-full h-100" />
 		</div>
 	);
 }

@@ -1,6 +1,6 @@
 import { ColorType, createChart } from "lightweight-charts";
 import { useEffect, useRef } from "react";
-import type { Indicators, MALine, StockDataPoint } from "../types/Stock";
+import type { IndicatorSettings, MALine, StockDataPoint } from "../types/Stock";
 
 function calculateSMA(data: StockDataPoint[], period: number) {
 	if (!data || data.length < period) return [];
@@ -77,7 +77,7 @@ export default function useStockChart({
 	data: StockDataPoint[];
 	ticker: string;
 	maLines: MALine[];
-	indicators: Indicators;
+	indicators: IndicatorSettings;
 }) {
 	const chartContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -93,7 +93,7 @@ export default function useStockChart({
 
 		const chart = createChart(chartContainerRef.current, {
 			layout: {
-				background: { type: ColorType.Solid, color: "#0f172a" },
+				background: { type: ColorType.Solid, color: "transparent" },
 				textColor: "#94a3b8",
 			},
 			grid: {

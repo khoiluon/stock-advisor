@@ -1,6 +1,7 @@
 import type { StylesConfig } from "react-select";
 
-export const selectStyles: StylesConfig = {
+// biome-ignore lint/suspicious/noExplicitAny: Kệ
+export const selectStyles: StylesConfig<any, any> = {
 	control: (provided) => ({
 		...provided,
 		backgroundColor: "#232e43",
