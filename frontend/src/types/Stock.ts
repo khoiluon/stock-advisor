@@ -73,3 +73,9 @@ export type IndicatorSettings = {
 		std: number;
 	};
 };
+
+export type UserFavorite = {
+	id: number;
+	stock: StockInfo;
+	added_at: Date;
+};

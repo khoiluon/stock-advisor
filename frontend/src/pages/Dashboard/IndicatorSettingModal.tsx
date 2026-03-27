@@ -2,18 +2,18 @@ import { useState } from "react";
 import { FiSliders } from "react-icons/fi";
 import Modal from "react-modal";
 import { Button } from "@/components/ui/Button";
-import { useStockDashboard } from "@/stores/stockDashboardStore";
+import { useDashboardStore } from "@/stores/DashboardStore";
 
 export default function IndicatorSettingModal() {
 	const [isOpen, setIsOpen] = useState(false);
 
-	const indicators = useStockDashboard((state) => state.indicators);
-	const setIndicators = useStockDashboard((state) => state.setIndicators);
-	const maLines = useStockDashboard((state) => state.maLines);
-	const addMaLine = useStockDashboard((state) => state.addMaLine);
-	const updateMaLine = useStockDashboard((state) => state.updateMaLine);
-	const removeMaLine = useStockDashboard((state) => state.removeMaLine);
-	const stockData = useStockDashboard((state) => state.stockData);
+	const indicators = useDashboardStore((state) => state.indicators);
+	const setIndicators = useDashboardStore((state) => state.setIndicators);
+	const maLines = useDashboardStore((state) => state.maLines);
+	const addMaLine = useDashboardStore((state) => state.addMaLine);
+	const updateMaLine = useDashboardStore((state) => state.updateMaLine);
+	const removeMaLine = useDashboardStore((state) => state.removeMaLine);
+	const stockData = useDashboardStore((state) => state.stockData);
 
 	return (
 		<>

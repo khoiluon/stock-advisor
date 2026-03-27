@@ -1,6 +1,36 @@
-import { ColorType, createChart } from "lightweight-charts";
+import {
+	CandlestickSeries,
+	ColorType,
+	createChart,
+	HistogramSeries,
+	type IChartApi,
+	type ISeriesApi,
+	LineSeries,
+	type Time,
+} from "lightweight-charts";
+import {
+	createLineToolsPlugin,
+	type ILineToolsPlugin,
+} from "lightweight-charts-line-tools-core";
+import { LineToolFibRetracement } from "lightweight-charts-line-tools-fib-retracement";
+import {
+	LineToolBrush,
+	LineToolHighlighter,
+} from "lightweight-charts-line-tools-freehand";
+import {
+	LineToolArrow,
+	LineToolCallout,
+	LineToolCrossLine,
+	LineToolExtendedLine,
+	LineToolHorizontalLine,
+	LineToolHorizontalRay,
+	LineToolRay,
+	LineToolTrendLine,
+	LineToolVerticalLine,
+} from "lightweight-charts-line-tools-lines";
 import { useEffect, useRef } from "react";
 import type { IndicatorSettings, MALine, StockDataPoint } from "../types/Stock";
+import { LineToolLongShortPosition } from "lightweight-charts-line-tools-long-short-position";
 
 function calculateSMA(data: StockDataPoint[], period: number) {
 	if (!data || data.length < period) return [];
@@ -61,6 +91,11 @@ function calculateMACD(
 	}));
 }
 
+const toUnixTime = (dateStr: string | Date | number) => {
+	// Lấy ra thời gian UNIX theo đúng định dạng giây
+	return Math.floor(new Date(dateStr).getTime() / 1000) as Time;
+};
+
 /**
  * Hook quản lý logic khởi tạo và điều khiển biểu đồ chứng khoán
  * * @description
@@ -70,91 +105,180 @@ function calculateMACD(
  */
 export default function useStockChart({
 	data,
-	ticker,
 	maLines,
 	indicators,
 }: {
 	data: StockDataPoint[];
-	ticker: string;
 	maLines: MALine[];
 	indicators: IndicatorSettings;
 }) {
 	const chartContainerRef = useRef<HTMLDivElement | null>(null);
+	const chartRef = useRef<IChartApi | null>(null);
+	const seriesRefs = useRef<{
+		candle: ISeriesApi<"Candlestick"> | null;
+		volume: ISeriesApi<"Histogram"> | null;
+		ma: Record<number, ISeriesApi<"Line">>;
+		bbands: Record<string, ISeriesApi<"Line">>;
+		macd: Record<string, ISeriesApi<"Line"> | ISeriesApi<"Histogram">>;
+		rsi: Record<string, ISeriesApi<"Line">>;
+	}>({
+		candle: null,
+		volume: null,
+		ma: {},
+		bbands: {},
+		macd: {},
+		rsi: {},
+	});
+	const lineToolsRef = useRef<ILineToolsPlugin | null>(null);
 
+	// Khởi tạo Chart (chỉ chạy 1 lần)
 	useEffect(() => {
-		if (!chartContainerRef.current || !data || data.length === 0) {
-			if (chartContainerRef.current) chartContainerRef.current.innerHTML = "";
-			return;
-		}
+		if (!chartContainerRef.current) return;
 
-		// **LOGIC "PHÁ ĐI XÂY LẠI" CÓ KIỂM SOÁT**
-		// Xóa biểu đồ cũ trước khi vẽ cái mới để đảm bảo sự sạch sẽ
 		chartContainerRef.current.innerHTML = "";
 
 		const chart = createChart(chartContainerRef.current, {
 			layout: {
-				background: { type: ColorType.Solid, color: "transparent" },
+				background: { type: ColorType.Solid, color: "#0F172B" },
 				textColor: "#94a3b8",
 			},
 			grid: {
-				vertLines: { color: "#1e293b" },
-				horzLines: { color: "#1e293b" },
+				vertLines: { color: "#1D293D" },
+				horzLines: { color: "#1D293D" },
 			},
-			width: chartContainerRef.current.clientWidth,
-			height: 400,
 			timeScale: { borderColor: "#475569", timeVisible: true },
 		});
 
-		// --- Xử lý dữ liệu ---
-		const sortedData = [...data].sort(
-			(a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-		);
-		const candlestickData = sortedData.map((d) => ({
-			time: d.date,
-			open: d.open,
-			high: d.high,
-			low: d.low,
-			close: d.close,
-		}));
-		const volumeData = sortedData.map((d) => ({
-			time: d.date,
-			value: d.volume,
-			color:
-				d.close >= d.open ? "rgba(34, 197, 94, 0.5)" : "rgba(239, 68, 68, 0.5)",
-		}));
+		chartRef.current = chart;
 
-		// --- Vẽ Series chính ---
-		const candleSeries = chart.addCandlestickSeries({
+		const candleSeries = chart.addSeries(CandlestickSeries, {
 			upColor: "#22c55e",
 			downColor: "#ef4444",
 			borderVisible: false,
 			wickUpColor: "#22c55e",
 			wickDownColor: "#ef4444",
 		});
-		candleSeries.setData(candlestickData);
+		seriesRefs.current.candle = candleSeries;
 
-		const volumeSeries = chart.addHistogramSeries({
+		const lineTools = createLineToolsPlugin(chart, candleSeries);
+
+		lineTools.registerLineTool("TrendLine", LineToolTrendLine);
+		lineTools.registerLineTool("Ray", LineToolRay);
+		lineTools.registerLineTool("Arrow", LineToolArrow);
+		lineTools.registerLineTool("ExtendedLine", LineToolExtendedLine);
+		lineTools.registerLineTool("HorizontalLine", LineToolHorizontalLine);
+		lineTools.registerLineTool("HorizontalRay", LineToolHorizontalRay);
+		lineTools.registerLineTool("VerticalLine", LineToolVerticalLine);
+		lineTools.registerLineTool("CrossLine", LineToolCrossLine);
+		lineTools.registerLineTool("Callout", LineToolCallout);
+
+		lineTools.registerLineTool("FibRetracement", LineToolFibRetracement);
+
+		lineTools.registerLineTool("LongShortPosition", LineToolLongShortPosition);
+
+		lineTools.registerLineTool("Brush", LineToolBrush);
+		lineTools.registerLineTool("Highlighter", LineToolHighlighter);
+
+		lineToolsRef.current = lineTools;
+
+		const volumeSeries = chart.addSeries(HistogramSeries, {
 			priceFormat: { type: "volume" },
 			priceScaleId: "volume_scale",
 		});
-		volumeSeries.setData(volumeData);
+		seriesRefs.current.volume = volumeSeries;
 
-		// --- Vẽ các chỉ báo (dựa trên logic từ file cũ của bạn) ---
-		let macdCreated = false;
+		const handleResize = () => {
+			if (chartContainerRef.current && chartRef.current) {
+				chartRef.current.applyOptions({
+					width: chartContainerRef.current.clientWidth,
+				});
+			}
+		};
+		window.addEventListener("resize", handleResize);
 
-		// Moving Averages
-		const maColors = { 20: "#38bdf8", 50: "#a78bfa", 200: "#facc15" };
-		maLines.forEach((line) => {
-			const maData = calculateSMA(sortedData, line.period);
-			const maSeries = chart.addLineSeries({
-				color: maColors[line.period] || "#FFFFFF",
-				lineWidth: 2,
-			});
-			maSeries.setData(maData);
+		return () => {
+			window.removeEventListener("resize", handleResize);
+			if (chartRef.current) {
+				chartRef.current.remove();
+				chartRef.current = null;
+			}
+			lineToolsRef.current = null;
+		};
+	}, []);
+
+	// 2. Cập nhật dữ liệu & Indicators
+	useEffect(() => {
+		// Log removed: log("data, maLines, indicators thay doi", ...)
+
+		if (!chartRef.current || !data || data.length === 0) return;
+
+		const chart = chartRef.current;
+		const refs = seriesRefs.current;
+
+		// --- Xử lý dữ liệu ---
+		const sortedData = [...data].sort(
+			(a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+		);
+		const candlestickData = sortedData.map((d) => ({
+			// time: d.date,
+			time: toUnixTime(d.date),
+			open: d.open,
+			high: d.high,
+			low: d.low,
+			close: d.close,
+		}));
+		const volumeData = sortedData.map((d) => ({
+			// time: d.date,
+			time: toUnixTime(d.date),
+			value: d.volume,
+			color:
+				d.close >= d.open ? "rgba(34, 197, 94, 0.5)" : "rgba(239, 68, 68, 0.5)",
+		}));
+
+		if (refs.candle) refs.candle.setData(candlestickData);
+		if (refs.volume) refs.volume.setData(volumeData);
+
+		// --- Moving Averages ---
+		const currentMaPeriods = new Set(maLines.map((l) => l.period));
+		Object.keys(refs.ma).forEach((periodStr) => {
+			const period = Number(periodStr);
+			if (!currentMaPeriods.has(period)) {
+				chart.removeSeries(refs.ma[period]);
+				delete refs.ma[period];
+			}
 		});
 
-		// Bollinger Bands
+		const maColors = { 20: "#38bdf8", 50: "#a78bfa", 200: "#facc15" };
+		maLines.forEach((line) => {
+			const period = line.period;
+			if (!refs.ma[period]) {
+				refs.ma[period] = chart.addSeries(LineSeries, {
+					color: maColors[period as keyof typeof maColors] || "#FFFFFF",
+					lineWidth: 2,
+				});
+			}
+			const maData = calculateSMA(sortedData, period);
+			refs.ma[period].setData(maData);
+		});
+
+		// --- Bollinger Bands ---
 		if (indicators.bbands?.visible && sortedData[0]?.["BBU_20_2.0"]) {
+			if (!refs.bbands.upper) {
+				refs.bbands.upper = chart.addSeries(LineSeries, {
+					color: "rgba(59,130,246,0.5)",
+					lineWidth: 1,
+				});
+
+				refs.bbands.middle = chart.addSeries(LineSeries, {
+					color: "rgba(250, 204, 21, 0.5)",
+					lineWidth: 1,
+					lineStyle: 2,
+				});
+				refs.bbands.lower = chart.addSeries(LineSeries, {
+					color: "rgba(59,130,246,0.5)",
+					lineWidth: 1,
+				});
+			}
 			const bbandsData = sortedData
 				.map((d) => ({
 					time: d.date,
@@ -163,87 +287,98 @@ export default function useStockChart({
 					lower: d["BBL_20_2.0"],
 				}))
 				.filter((d) => d.upper);
-			const upper = chart.addLineSeries({
-				color: "rgba(59,130,246,0.5)",
-				lineWidth: 1,
-			});
-			const middle = chart.addLineSeries({
-				color: "rgba(250, 204, 21, 0.5)",
-				lineWidth: 1,
-				lineStyle: 2,
-			});
-			const lower = chart.addLineSeries({
-				color: "rgba(59,130,246,0.5)",
-				lineWidth: 1,
-			});
-			upper.setData(bbandsData.map((d) => ({ time: d.time, value: d.upper })));
-			middle.setData(
+			refs.bbands.upper.setData(
+				bbandsData.map((d) => ({ time: d.time, value: d.upper })),
+			);
+			refs.bbands.middle.setData(
 				bbandsData.map((d) => ({ time: d.time, value: d.middle })),
 			);
-			lower.setData(bbandsData.map((d) => ({ time: d.time, value: d.lower })));
+			refs.bbands.lower.setData(
+				bbandsData.map((d) => ({ time: d.time, value: d.lower })),
+			);
+		} else if (refs.bbands.upper) {
+			chart.removeSeries(refs.bbands.upper);
+			chart.removeSeries(refs.bbands.middle);
+			chart.removeSeries(refs.bbands.lower);
+			refs.bbands = {};
 		}
 
-		// MACD
+		// --- MACD ---
+		let macdCreated = false;
 		if (indicators.macd?.visible) {
 			macdCreated = true;
+			if (!refs.macd.macdSeries) {
+				refs.macd.macdSeries = chart.addSeries(LineSeries, {
+					color: "#38bdf8",
+					lineWidth: 2,
+					priceScaleId: "macd",
+				});
+				refs.macd.signalSeries = chart.addSeries(LineSeries, {
+					color: "#a78bfa",
+					lineWidth: 2,
+					lineStyle: 2,
+					priceScaleId: "macd",
+				});
+				refs.macd.histSeries = chart.addSeries(HistogramSeries, {
+					priceScaleId: "macd",
+				});
+			}
 			const macdData = calculateMACD(
 				sortedData,
 				indicators.macd.fast,
 				indicators.macd.slow,
 				indicators.macd.signal,
 			);
-			const macdSeries = chart.addLineSeries({
-				color: "#38bdf8",
-				lineWidth: 2,
-				priceScaleId: "macd",
-			});
-			const signalSeries = chart.addLineSeries({
-				color: "#a78bfa",
-				lineWidth: 2,
-				lineStyle: 2,
-				priceScaleId: "macd",
-			});
-			const histSeries = chart.addHistogramSeries({ priceScaleId: "macd" });
-			macdSeries.setData(
+			refs.macd.macdSeries.setData(
 				macdData.map((d) => ({ time: d.time, value: d.macd })),
 			);
-			signalSeries.setData(
+			refs.macd.signalSeries.setData(
 				macdData.map((d) => ({ time: d.time, value: d.signal })),
 			);
-			histSeries.setData(
+			refs.macd.histSeries.setData(
 				macdData.map((d) => ({
 					time: d.time,
 					value: d.hist,
 					color: d.hist >= 0 ? "#22c55e" : "#ef4444",
 				})),
 			);
+		} else if (refs.macd.macdSeries) {
+			chart.removeSeries(refs.macd.macdSeries);
+			chart.removeSeries(refs.macd.signalSeries);
+			chart.removeSeries(refs.macd.histSeries);
+			refs.macd = {};
 		}
 
-		// RSI
+		// --- RSI ---
 		if (indicators.rsi?.visible && sortedData[0]?.["RSI_14"]) {
+			if (!refs.rsi.series) {
+				refs.rsi.series = chart.addSeries(LineSeries, {
+					color: "#fcd34d",
+					lineWidth: 2,
+					priceScaleId: "rsi",
+				});
+				refs.rsi.series.createPriceLine({
+					price: 70,
+					color: "#ef4444",
+					lineWidth: 1,
+					lineStyle: 2,
+					title: "Overbought",
+				});
+				refs.rsi.series.createPriceLine({
+					price: 30,
+					color: "#22c55e",
+					lineWidth: 1,
+					lineStyle: 2,
+					title: "Oversold",
+				});
+			}
 			const rsiData = sortedData
 				.map((d) => ({ time: d.date, value: d.RSI_14 }))
 				.filter((p) => p.value);
-			const rsiSeries = chart.addLineSeries({
-				color: "#fcd34d",
-				lineWidth: 2,
-				priceScaleId: "rsi",
-			});
-			rsiSeries.setData(rsiData);
-			rsiSeries.createPriceLine({
-				price: 70,
-				color: "#ef4444",
-				lineWidth: 1,
-				lineStyle: 2,
-				title: "Overbought",
-			});
-			rsiSeries.createPriceLine({
-				price: 30,
-				color: "#22c55e",
-				lineWidth: 1,
-				lineStyle: 2,
-				title: "Oversold",
-			});
+			refs.rsi.series.setData(rsiData);
+		} else if (refs.rsi.series) {
+			chart.removeSeries(refs.rsi.series);
+			refs.rsi = {};
 		}
 
 		// --- Cấu hình layout động ---
@@ -293,20 +428,7 @@ export default function useStockChart({
 				visible: false,
 			});
 		}
+	}, [data, maLines, indicators]);
 
-		// --- Hoàn thiện ---
-		const handleResize = () => {
-			if (chartContainerRef.current) {
-				chart.applyOptions({ width: chartContainerRef.current.clientWidth });
-			}
-		};
-		window.addEventListener("resize", handleResize);
-
-		return () => {
-			window.removeEventListener("resize", handleResize);
-			chart.remove();
-		};
-	}, [data, ticker, maLines, indicators]); // Phụ thuộc vào tất cả để vẽ lại khi cần
-
-	return chartContainerRef;
+	return { chartContainerRef, lineTools: lineToolsRef };
 }

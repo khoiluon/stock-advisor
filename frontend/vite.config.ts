@@ -15,4 +15,12 @@ export default defineConfig({
 	resolve: {
 		alias: [{ find: "@", replacement: "/src" }],
 	},
+	// optimizeDeps: {
+	// 	// Loại trừ khỏi pre-bundling để Vite xử lý như code dự án
+	// 	exclude: [
+	// 		"lightweight-charts-line-tools-core",
+	// 		"lightweight-charts-line-tools-fib-retracement",
+	// 		"lightweight-charts-line-tools-lines",
+	// 	],
+	// },
 });

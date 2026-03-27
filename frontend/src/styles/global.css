@@ -1,20 +1,33 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
 @theme inline {
     --color-background: var(--background);
     --color-foreground: var(--foreground);
     --color-card: var(--card);
     --color-card-foreground: var(--card-foreground);
+    --color-border: var(--border);
+    --font-sans: "Open Sans Variable", sans-serif;
+    --font-mono: "UnifontEX", monospace;
 }
 
 :root {
     --background: var(--color-slate-900);
-    --foreground: oklch(0.145 0 0);
+    --foreground: var(--color-slate-100);
     --card: var(--color-slate-800);
-    --card-foreground: oklch(0.985 0 0);
+    --card-foreground: var(--color-slate-100);
+    --border: var(--color-slate-700);
 }
 
 @layer base {
+    * {
+        border: var(--color-border);
+    }
+
+    input:focus {
+        @apply outline-none ring-2 ring-slate-500 ring-offset-1 border-slate-600 transition-colors transition-shadow duration-150;
+    }
+
     body {
         @apply bg-background text-foreground;
     }

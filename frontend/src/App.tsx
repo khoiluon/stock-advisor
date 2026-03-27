@@ -12,7 +12,7 @@ import Register from "@/components/Register";
 import ScreenerPage from "@/components/ScreenerPage";
 import Dashboard from "@/pages/Dashboard";
 import QueryProvider from "@/providers/QueryProvider";
-import { StockDashboardProvider } from "./providers/StockDashboardProvider";
+import DashboardProvider from "@/providers/DashboardProvider";
 
 function App() {
 	const [isChatOpen, setChatOpen] = useState(false);
@@ -59,9 +59,9 @@ function App() {
 						<Route
 							path="/"
 							element={
-								<StockDashboardProvider>
+								<DashboardProvider>
 									<Dashboard />
-								</StockDashboardProvider>
+								</DashboardProvider>
 							}
 						/>
 						<Route path="/favorites" element={<Favorites />} />

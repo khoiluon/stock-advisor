@@ -1,28 +1,28 @@
-import { useStockDashboard } from "@/stores/stockDashboardStore";
-import Header from "./Header";
-import { StockChartWrapper } from "./StockChartWrapper";
-import { StockInfoHeader } from "./StockInfoHeader";
-import TickerSelection from "./TickerSelection";
+import { cn } from "tailwind-variants";
+import { useDashboardStore } from "@/stores/DashboardStore";
+import DashboardHeader from "./DashboardHeader";
+import { DashboardStockChartWrapper } from "./DashboardStockChartWrapper";
 
 const Dashboard = () => {
-	const error = useStockDashboard((state) => state.error);
+	const error = useDashboardStore((state) => state.error);
 
 	return (
-		<div>
-			<main className="px-10 pt-4 space-y-4">
-				<Header />
-				<TickerSelection />
+		<main className="p-6 flex flex-col gap-4 h-screen">
+			<DashboardHeader />
 
-				{error && (
-					<div className="bg-red-900/20 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg mb-6">
-						{error}
-					</div>
-				)}
+			{error && (
+				<div
+					className={cn(
+						"px-4 py-3 rounded-lg mb-6",
+						"bg-red-900/20 border border-red-500/30 text-red-400",
+					)}
+				>
+					{error}
+				</div>
+			)}
 
-				<StockInfoHeader />
-				<StockChartWrapper />
-			</main>
-		</div>
+			<DashboardStockChartWrapper />
+		</main>
 	);
 };
 

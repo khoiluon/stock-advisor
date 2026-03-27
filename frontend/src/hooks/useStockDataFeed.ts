@@ -1,22 +1,10 @@
 import { useEffect, useState } from "react";
 import useWebSocket, { ReadyState } from "react-use-websocket";
 import { useStore } from "zustand";
-import type { StockDashboardStore } from "@/stores/stockDashboardStore";
+import type { StockDashboardStore } from "@/stores/DashboardStore";
 
 export const useStockDataFeed = (store: StockDashboardStore) => {
-	// Get state and actions from the Zustand store
-	// const { ticker, isHistoryLoaded } = useStore(store, (state) => ({
-	// 	ticker: state.ticker,
-	// 	isHistoryLoaded: state.isHistoryLoaded,
-	// }));
-	// const {
-	// 	setConnectionStatus,
-	// 	updateStockData,
-	// 	processPendingMessages,
-	// 	addPendingMessage,
-	// } = store.getState();
-	//
-	const ticker = useStore(store, (state) => state.ticker);
+	const ticker = useStore(store, (state) => state.stockInfo.ticker);
 	const isHistoryLoaded = useStore(store, (state) => state.isHistoryLoaded);
 
 	const setConnectionStatus = useStore(
@@ -89,6 +77,7 @@ export const useStockDataFeed = (store: StockDashboardStore) => {
 					volume: parseInt(content.Volume, 10) || 0,
 				};
 				// Use the action from the store to update the state
+				console.log("new stock data!!!");
 				updateStockData(newCandleData);
 			}
 		}
