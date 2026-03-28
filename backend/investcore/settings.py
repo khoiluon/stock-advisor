@@ -9,13 +9,16 @@ https://docs.djangoproject.com/en/5.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
-from decouple import config
-from pathlib import Path
-from celery.schedules import crontab
+
 import os
+from pathlib import Path
+
+from celery.schedules import crontab
+from decouple import config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
 
 # Helper: ưu tiên biến môi trường (Docker Compose) > .env file (local dev)
 def env(key, default=None, cast=str):
@@ -27,69 +30,69 @@ def env(key, default=None, cast=str):
         return config(key, default=default, cast=cast)
     except Exception:
         return default
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-SECRET_KEY = config('SECRET_KEY')
+SECRET_KEY = config("SECRET_KEY")
 
-DEBUG = config('DEBUG', default=False, cast=bool)
+DEBUG = config("DEBUG", default=False, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,backend,0.0.0.0').split(',')
+ALLOWED_HOSTS = config(
+    "ALLOWED_HOSTS", default="localhost,127.0.0.1,backend,0.0.0.0"
+).split(",")
 
 
 # Application definition
 
 INSTALLED_APPS = [
-    'channels',
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-
-    'django_celery_beat',
+    "channels",
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "django_celery_beat",
     # Thư viện bên thứ ba
-    'rest_framework',
-    'rest_framework.authtoken',
-    'corsheaders',
-
-
+    "rest_framework",
+    "rest_framework.authtoken",
+    "corsheaders",
     # App của dự án
-    'api',
-
-    'ssi_integration',
+    "api",
+    "ssi_integration",
 ]
 
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-ROOT_URLCONF = 'investcore.urls'
+ROOT_URLCONF = "investcore.urls"
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = 'investcore.wsgi.application'
+WSGI_APPLICATION = "investcore.wsgi.application"
 
 
 # Database
@@ -98,13 +101,13 @@ WSGI_APPLICATION = 'investcore.wsgi.application'
 # backend/core/settings.py
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': env('DB_NAME', default='stock_advisor_db'),
-        'USER': env('DB_USER', default='root'),
-        'PASSWORD': env('DB_PASSWORD', default=''),
-        'HOST': env('DB_HOST', default='localhost'),
-        'PORT': env('DB_PORT', default='3306'),
+    "default": {
+        "ENGINE": "django.db.backends.mysql",
+        "NAME": env("DB_NAME", default="stock_advisor_db"),
+        "USER": env("DB_USER", default="root"),
+        "PASSWORD": env("DB_PASSWORD", default=""),
+        "HOST": env("DB_HOST", default="localhost"),
+        "PORT": env("DB_PORT", default="3306"),
     }
 }
 
@@ -114,16 +117,16 @@ DATABASES = {
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
 
@@ -131,11 +134,16 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://frontend:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://frontend:5173",
 ]
 
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
 ]
@@ -143,22 +151,21 @@ CSRF_TRUSTED_ORIGINS = [
 # CẤU HÌNH CHO DJANGO REST FRAMEWORK
 REST_FRAMEWORK = {
     # Chỉ định phương thức xác thực mặc định là TokenAuthentication
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication',
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.TokenAuthentication",
     ],
     # (Tùy chọn nhưng khuyến khích) Đặt quyền mặc định cho toàn bộ API
     # Điều này có nghĩa là tất cả các API endpoint đều yêu cầu đăng nhập trừ khi được chỉ định khác
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
-    ]
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
 }
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = "en-us"
 
 TIME_ZONE = 'Asia/Ho_Chi_Minh'
-
 USE_I18N = True
 
 USE_TZ = True
@@ -167,33 +174,35 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = "static/"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ==============================================================================
 # CELERY SETTINGS
 # ==============================================================================
-CELERY_BROKER_URL = env('REDIS_URL', default='redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = env('REDIS_URL', default='redis://localhost:6379/0')
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = 'Asia/Ho_Chi_Minh' # Đặt múi giờ Việt Nam
-CELERY_TASK_ALWAYS_EAGER = config('CELERY_TASK_ALWAYS_EAGER', default=False, cast=bool)
-CELERY_TASK_EAGER_PROPAGATES = config('CELERY_TASK_ALWAYS_EAGER', default=False, cast=bool)
+CELERY_BROKER_URL = env("REDIS_URL", default="redis://localhost:6379/0")
+CELERY_RESULT_BACKEND = env("REDIS_URL", default="redis://localhost:6379/0")
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = "Asia/Ho_Chi_Minh"  # Đặt múi giờ Việt Nam
+CELERY_TASK_ALWAYS_EAGER = config("CELERY_TASK_ALWAYS_EAGER", default=False, cast=bool)
+CELERY_TASK_EAGER_PROPAGATES = config(
+    "CELERY_TASK_ALWAYS_EAGER", default=False, cast=bool
+)
 
 # Cấu hình cho Celery Beat
-CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 
 # Lịch trình chạy tác vụ
 CELERY_BEAT_SCHEDULE = {
-    'crawl-news-every-30-minutes': {
-        'task': 'api.tasks.crawl_news_task',
-        'schedule': 1800.0,  # 30 phút
+    "crawl-news-every-30-minutes": {
+        "task": "api.tasks.crawl_news_task",
+        "schedule": 1800.0,  # 30 phút
     },
     # 'fetch-daily-data-after-market-close': {
     #     'task': 'api.tasks.fetch_daily_data_vnstock_task',
@@ -207,26 +216,26 @@ CELERY_BEAT_SCHEDULE = {
 }
 
 # ===================AI===========================
-GEMINI_API_KEY = config('GEMINI_API_KEY', default='')
+GEMINI_API_KEY = config("GEMINI_API_KEY", default="")
 # ==============================================================================
 # CẤU HÌNH SSI FASTCONNECT DATA
 # ==============================================================================
-SSI_FCDATA_CONSUMER_ID = os.getenv('SSI_FCDATA_CONSUMER_ID')
-SSI_FCDATA_CONSUMER_SECRET = os.getenv('SSI_FCDATA_CONSUMER_SECRET')
+SSI_FCDATA_CONSUMER_ID = os.getenv("SSI_FCDATA_CONSUMER_ID")
+SSI_FCDATA_CONSUMER_SECRET = os.getenv("SSI_FCDATA_CONSUMER_SECRET")
 
 # URL mặc định từ tài liệu của SSI
-SSI_FCDATA_URL = 'https://fc-data.ssi.com.vn/'
-SSI_FCDATA_STREAM_URL = 'https://fc-datahub.ssi.com.vn/'
+SSI_FCDATA_URL = "https://fc-data.ssi.com.vn/"
+SSI_FCDATA_STREAM_URL = "https://fc-datahub.ssi.com.vn/"
 
-ASGI_APPLICATION = 'investcore.asgi.application'
+ASGI_APPLICATION = "investcore.asgi.application"
 
 # CHANNEL_REDIS_HOST: 'redis' trong Docker, '127.0.0.1' khi chạy local
-_CHANNEL_REDIS_HOST = os.getenv('CHANNEL_REDIS_HOST', '127.0.0.1')
+_CHANNEL_REDIS_HOST = os.getenv("CHANNEL_REDIS_HOST", "127.0.0.1")
 
 CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
             "hosts": [(_CHANNEL_REDIS_HOST, 6379)],
         },
     },
