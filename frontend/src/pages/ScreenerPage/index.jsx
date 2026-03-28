@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
+import { useCallback, useEffect, useState } from "react";
 import { FiSearch, FiFilter } from "react-icons/fi";
-import SuggestionCard from "./SuggestionCard"; // Import component con
-import LoadingSpinner from "./LoadingSpinner";
+import LoadingSpinner from "@/components/LoadingSpinner";
+import SuggestionCard from "@/components/SuggestionCard";
 
 const ScreenerPage = () => {
 	const [suggestions, setSuggestions] = useState([]);
@@ -59,7 +59,7 @@ const ScreenerPage = () => {
 	}, [fetchSuggestions]);
 
 	return (
-		<>
+		<div className="w-full max-w-5xl p-8 mx-auto">
 			<div className="flex justify-between items-center mb-2">
 				<h1 className="text-3xl font-bold text-white">Stock Suggestions</h1>
 				{!loading && (
@@ -119,7 +119,7 @@ const ScreenerPage = () => {
 					))}
 				</div>
 			)}
-		</>
+		</div>
 	);
 };
 

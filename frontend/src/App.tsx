@@ -3,16 +3,16 @@ import { Toaster } from "react-hot-toast";
 import { FaComments } from "react-icons/fa";
 import { Route, BrowserRouter as Router, Routes } from "react-router-dom";
 import ChatbotWindow from "@/components/ChatbotWindow";
-import Favorites from "@/components/Favorites";
-import FinancialNews from "@/components/FinancialNews";
 import Layout from "@/components/Layout";
 import Login from "@/components/Login";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Register from "@/components/Register";
-import ScreenerPage from "@/components/ScreenerPage";
+import ScreenerPage from "@/pages/ScreenerPage";
+import FinancialNews from "@/pages/FinancialNews";
 import Dashboard from "@/pages/Dashboard";
 import QueryProvider from "@/providers/QueryProvider";
 import DashboardProvider from "@/providers/DashboardProvider";
+import Favorites from "./pages/Favorites";
 
 function App() {
 	const [isChatOpen, setChatOpen] = useState(false);
@@ -44,11 +44,9 @@ function App() {
 				/>
 
 				<Routes>
-					{/* Các trang không cần Sidebar */}
 					<Route path="/register" element={<Register />} />
 					<Route path="/login" element={<Login />} />
 
-					{/* Các trang cần Sidebar */}
 					<Route
 						element={
 							<ProtectedRoute>
@@ -69,11 +67,10 @@ function App() {
 						<Route path="/screener" element={<ScreenerPage />} />
 					</Route>
 				</Routes>
-				<div className="chat-icon" onClick={toggleChat}>
+				<button type="button" className="chat-icon" onClick={toggleChat}>
 					<FaComments size={28} color="white" />
-				</div>
+				</button>
 
-				{/* 2. Cửa sổ chat, chỉ hiển thị khi isChatOpen là true */}
 				<div className={`chat-window-container ${isChatOpen ? "open" : ""}`}>
 					<ChatbotWindow />
 				</div>

@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useCallback } from "react";
+import LoadingSpinner from "@/components/LoadingSpinner";
 import axios from "axios";
+import { useCallback, useEffect, useState } from "react";
 import { FiRefreshCw } from "react-icons/fi";
-import LoadingSpinner from "./LoadingSpinner";
-import Pagination from "./Pagination";
+import Pagination from "@/components/Pagination";
+
 // Helper: convert ISO date to "about X hours ago"
 function timeAgo(dateStr) {
 	const date = new Date(dateStr);
@@ -65,7 +66,7 @@ const FinancialNews = () => {
 	};
 
 	return (
-		<>
+		<div className="w-full max-w-5xl p-8 mx-auto">
 			<div className="flex justify-between items-center mb-8">
 				<h1 className="text-3xl font-bold text-white">Tin tức Tài chính</h1>
 				<button
@@ -124,7 +125,7 @@ const FinancialNews = () => {
 					onPageChange={handlePageChange}
 				/>
 			)}
-		</>
+		</div>
 	);
 };
 

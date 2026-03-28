@@ -13,7 +13,7 @@ const Dashboard = () => {
 			{error && (
 				<div
 					className={cn(
-						"px-4 py-3 rounded-lg mb-6",
+						"px-4 py-3 rounded-lg",
 						"bg-red-900/20 border border-red-500/30 text-red-400",
 					)}
 				>

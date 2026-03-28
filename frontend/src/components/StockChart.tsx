@@ -210,11 +210,9 @@ function ChartDrawSelectedTool({
 	if (!isSelectedDraw) return null;
 
 	return (
-		<Card className={cn("p-2 flex items-center gap-3 px-3", className)}>
-			<span className="text-sm font-medium">{isSelectedDraw.toolType}</span>
-
-			<div className="w-px h-6 bg-slate-600" />
-
+		<Card
+			className={cn("p-2 flex items-center gap-3 px-3 shadow-2xl", className)}
+		>
 			<div className="flex items-center gap-2">
 				<PaletteIcon size={20} className="text-slate-100" />
 				<input

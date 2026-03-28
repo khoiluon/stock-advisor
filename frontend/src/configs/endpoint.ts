@@ -6,6 +6,7 @@ export const endpoint = {
 	},
 	watchlist: {
 		list: "/watchlist/",
+		add: "/watchlist/",
 		delete: (id: string) => `/watchlist/${id}/`,
 	},
 };
