@@ -24,38 +24,54 @@ class Command(BaseCommand):
             for market in markets:
                 self.stdout.write(f"Đang xử lý dữ liệu cho sàn {market}...")
 
-                req = securities(market=market, pageIndex=1, pageSize=1000)
-                response = client.securities(config, req)
+                page_index = 1
+                page_size = 1000
+                all_stocks = []
 
-                response_status = response.get('status')
-                if (response_status == 200 or str(response_status).lower() == 'success') and response.get('data'):
-                    stocks_to_process = response['data']
-                    self.stdout.write(f"Tìm thấy {len(stocks_to_process)} mã trên sàn {market}.")
+                # Pagination loop — lấy hết tất cả các trang
+                while True:
+                    req = securities(market=market, pageIndex=page_index, pageSize=page_size)
+                    response = client.securities(config, req)
 
-                    for item in stocks_to_process:
-                        ticker = item.get('Symbol')
-                        if not ticker:
-                            continue
+                    response_status = response.get('status')
+                    if (response_status == 200 or str(response_status).lower() == 'success') and response.get('data'):
+                        page_data = response['data']
+                        all_stocks.extend(page_data)
+                        self.stdout.write(f"  Trang {page_index}: {len(page_data)} mã")
 
-                        # **LOGIC XỬ LÝ AN TOÀN HƠN**
-                        # Lấy tên công ty, nếu là None thì chuyển thành chuỗi rỗng
-                        company_name = item.get('StockName') or ''
+                        # Nếu trả về ít hơn pageSize → đã hết data
+                        if len(page_data) < page_size:
+                            break
+                        page_index += 1
+                    else:
+                        if page_index == 1:
+                            self.stderr.write(self.style.WARNING(
+                                f"Không nhận được dữ liệu cho sàn {market}. Response: {response}"))
+                        break
 
-                        stock_obj, created = Stock.objects.update_or_create(
-                            ticker=ticker,
-                            defaults={
-                                'company_name': company_name,
-                                'exchange': item.get('Market', 'OTHER'),
-                            }
-                        )
+                self.stdout.write(f"Tìm thấy tổng {len(all_stocks)} mã trên sàn {market}.")
 
-                        if created:
-                            created_count += 1
-                        else:
-                            updated_count += 1
-                else:
-                    self.stderr.write(self.style.WARNING(
-                        f"Không nhận được dữ liệu hoặc có lỗi cho sàn {market}. Response: {response}"))
+                for item in all_stocks:
+                    ticker = item.get('Symbol')
+                    if not ticker:
+                        continue
+
+                    company_name = item.get('StockName') or ''
+                    stock_type = item.get('StockType') or ''
+
+                    stock_obj, created = Stock.objects.update_or_create(
+                        ticker=ticker,
+                        defaults={
+                            'company_name': company_name,
+                            'exchange': item.get('Market', 'OTHER'),
+                            'stock_type': stock_type,
+                        }
+                    )
+
+                    if created:
+                        created_count += 1
+                    else:
+                        updated_count += 1
 
             self.stdout.write(self.style.SUCCESS("Hoàn thành!"))
             self.stdout.write(f"- Đã tạo mới: {created_count} mã cổ phiếu.")

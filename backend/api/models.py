@@ -53,6 +53,11 @@ class Stock(models.Model):
         default=ExchangeChoices.HOSE
     )
     industry = models.CharField(max_length=255, null=True, blank=True)
+    stock_type = models.CharField(
+        max_length=20, null=True, blank=True,
+        help_text="Loại CK từ SSI: S (cổ phiếu), ETF, CW, bond..."
+    )
+    is_active = models.BooleanField(default=True, help_text="Mã có đang giao dịch không")
 
     def __str__(self):
         return self.ticker
@@ -70,6 +75,10 @@ class StockData(models.Model):
     low = models.DecimalField(max_digits=10, decimal_places=2)
     close = models.DecimalField(max_digits=10, decimal_places=2)
     volume = models.BigIntegerField()
+    adj_close = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Giá đóng cửa đã điều chỉnh (closepriceadjusted từ SSI)"
+    )
 
     class Meta:
         unique_together = ('stock', 'date')
@@ -236,6 +245,98 @@ class Article(models.Model):
     def __str__(self):
         return self.title
 
+
+# ==============================================================================
+# ML Models — Dự đoán ML, Trạng thái thị trường, Cảnh báo bất thường
+# ==============================================================================
+
+class MLModel(models.Model):
+    """Metadata cho một model ML đã train."""
+    MODEL_TYPES = [
+        ('trend', 'Trend Prediction'),
+        ('market_state', 'Market State'),
+        ('anomaly', 'Anomaly Detection'),
+    ]
+    name = models.CharField(max_length=100)
+    model_type = models.CharField(max_length=20, choices=MODEL_TYPES)
+    version = models.CharField(max_length=20)
+    file_path = models.CharField(max_length=500)
+    features_used = models.JSONField(default=list)
+    metrics = models.JSONField(default=dict)
+    trained_at = models.DateTimeField()
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "ML Model"
+
+    def __str__(self):
+        return f"{self.name} v{self.version} ({'active' if self.is_active else 'inactive'})"
+
+
+class MLPrediction(models.Model):
+    """Dự đoán xu hướng giá từ model ML."""
+    TREND_CHOICES = [
+        ('UP', 'Up'),
+        ('DOWN', 'Down'),
+        ('SIDEWAY', 'Sideway'),
+    ]
+    stock = models.ForeignKey(Stock, on_delete=models.CASCADE, related_name='ml_predictions')
+    prediction_date = models.DateField()
+    model = models.ForeignKey(MLModel, on_delete=models.SET_NULL, null=True, blank=True)
+    trend_class = models.CharField(max_length=10, choices=TREND_CHOICES)
+    trend_probability = models.JSONField(default=dict, help_text="{up: 0.72, down: 0.10, sideway: 0.18}")
+    target_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    stop_loss = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    confidence_score = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = ('stock', 'prediction_date')
+        ordering = ['-confidence_score']
+        verbose_name = "ML Prediction"
+
+    def __str__(self):
+        return f"{self.stock.ticker} {self.prediction_date} → {self.trend_class} ({self.confidence_score}%)"
+
+
+class AnomalyAlert(models.Model):
+    """Cảnh báo dòng tiền bất thường từ Isolation Forest."""
+    stock = models.ForeignKey(Stock, on_delete=models.CASCADE, related_name='anomaly_alerts')
+    detected_at = models.DateTimeField()
+    anomaly_type = models.CharField(max_length=50)
+    anomaly_score = models.FloatField()
+    details = models.JSONField(default=dict)
+
+    class Meta:
+        ordering = ['-detected_at']
+        verbose_name = "Anomaly Alert"
+
+    def __str__(self):
+        return f"{self.stock.ticker} {self.anomaly_type} @ {self.detected_at:%Y-%m-%d}"
+
+
+class MarketState(models.Model):
+    """Trạng thái tổng quan thị trường (VNINDEX)."""
+    STATE_CHOICES = [
+        ('UPTREND', 'Uptrend'),
+        ('DOWNTREND', 'Downtrend'),
+        ('SIDEWAY', 'Sideway'),
+    ]
+    date = models.DateField(unique=True)
+    state = models.CharField(max_length=10, choices=STATE_CHOICES)
+    confidence = models.PositiveIntegerField(default=0)
+    details = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-date']
+        verbose_name = "Market State"
+
+    def __str__(self):
+        return f"{self.date} → {self.state} ({self.confidence}%)"
+
+
+# ==============================================================================
+# Chat — Phiên trò chuyện với chatbot
+# ==============================================================================
 
 class ChatSession(models.Model):
     """
