@@ -1,0 +1,9 @@
+data/
+notebooks/
+*.pyc
+__pycache__/
+*.egg-info/
+.git/
+.env
+dump.rdb
+*.log

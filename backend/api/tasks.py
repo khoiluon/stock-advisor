@@ -598,3 +598,28 @@ def fetch_daily_data_vnstock_task(self):
     except Exception as e:
         logger.error(f"Lỗi nghiêm trọng trong task: {e}", exc_info=True)
         return f"Task thất bại: {e}"
+
+
+@shared_task(name="api.tasks.sync_ohlc_history_task")
+def sync_ohlc_history_task():
+    """Sync OHLCV + adj_close vào MLStockData (incremental, 18:00 T2-T6)."""
+    from django.core.management import call_command
+    call_command("sync_ohlc_history", include_today=True)
+
+
+@shared_task(name="api.tasks.run_daily_prediction_task")
+def run_daily_prediction_task():
+    """Pipeline ML hàng ngày: export → features → predict → save (19:00 T2-T6).
+    Deprecated: dùng run_ml_predictions_task thay thế.
+    """
+    from django.core.management import call_command
+    call_command("run_daily_prediction")
+
+
+@shared_task(name="api.tasks.run_ml_predictions_task", time_limit=3600, soft_time_limit=3000)
+def run_ml_predictions_task():
+    """Full ML pipeline Phase 5: export → features → predict → save MLPrediction + PotentialStock → anomaly → market state.
+    Chạy 19:00 T2-T6, sau sync_ohlc 1h.
+    """
+    from django.core.management import call_command
+    call_command("run_ml_predictions")

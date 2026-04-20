@@ -1,63 +1,61 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
 /* Kiểu dáng cho icon nổi */
 .chat-icon {
-  position: fixed;
-  bottom: 2rem;
-  right: 2rem;
-  background-color: #2563eb; /* Màu xanh dương */
-  color: white;
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  z-index: 1000;
-  transition: transform 0.2s ease-in-out;
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    background-color: #2563eb; /* Màu xanh dương */
+    color: white;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    transition: transform 0.2s ease-in-out;
 }
 
 .chat-icon:hover {
-  transform: scale(1.1);
+    transform: scale(1.1);
 }
 
 /* Container cho cửa sổ chat */
 .chat-window-container {
-  position: fixed;
-  bottom: 6.5rem; /* Đặt phía trên icon một chút */
-  right: 2rem;
-  width: 400px; /* Chiều rộng cửa sổ chat */
-  height: 600px; /* Chiều cao cửa sổ chat */
-  z-index: 999;
-  
-  /* Hiệu ứng ẩn/hiện */
-  opacity: 0;
-  transform: translateY(20px);
-  transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
-  pointer-events: none; /* Không cho click khi đang ẩn */
+    position: fixed;
+    bottom: 6.5rem; /* Đặt phía trên icon một chút */
+    right: 2rem;
+    width: 400px; /* Chiều rộng cửa sổ chat */
+    height: 600px; /* Chiều cao cửa sổ chat */
+    z-index: 999;
+
+    /* Hiệu ứng ẩn/hiện */
+    opacity: 0;
+    transform: translateY(20px);
+    transition:
+        opacity 0.3s ease-in-out,
+        transform 0.3s ease-in-out;
+    pointer-events: none; /* Không cho click khi đang ẩn */
 }
 
 /* Khi có class 'open', cửa sổ chat sẽ hiện ra */
 .chat-window-container.open {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto; /* Cho phép click khi hiện */
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto; /* Cho phép click khi hiện */
 }
 
 /* Responsive cho màn hình nhỏ */
 @media (max-width: 768px) {
-  .chat-window-container {
-    width: 90vw;
-    height: 70vh;
-    right: 5vw;
-    bottom: 6rem;
-  }
-  .chat-icon {
-    bottom: 1.5rem;
-    right: 1.5rem;
-  }
+    .chat-window-container {
+        width: 90vw;
+        height: 70vh;
+        right: 5vw;
+        bottom: 6rem;
+    }
+    .chat-icon {
+        bottom: 1.5rem;
+        right: 1.5rem;
+    }
 }

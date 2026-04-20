@@ -6,7 +6,12 @@ from .views import (RegisterAPIView,
                     WatchlistDeleteView,
                     ArticleListAPIView,
                     StockScreenerAPIView,
-                    StockSearchAPIView,)
+                    StockSearchAPIView,
+                    MLPredictionListAPIView,
+                    MLPredictionDetailAPIView,
+                    MarketStateAPIView,
+                    AnomalyAlertListAPIView,
+                    MLModelInfoAPIView,)
                     # ChatbotView)
 from rest_framework.routers import DefaultRouter
 from rest_framework.authtoken.views import obtain_auth_token
@@ -30,6 +35,13 @@ urlpatterns = [
     path('news/', ArticleListAPIView.as_view(), name='news-list'),
 
     path('screener/', StockScreenerAPIView.as_view(), name='stock-screener'),
+
+    # ML Prediction endpoints
+    path('ml/predictions/', MLPredictionListAPIView.as_view(), name='ml-prediction-list'),
+    path('ml/predictions/<str:ticker>/', MLPredictionDetailAPIView.as_view(), name='ml-prediction-detail'),
+    path('ml/market-state/', MarketStateAPIView.as_view(), name='ml-market-state'),
+    path('ml/anomalies/', AnomalyAlertListAPIView.as_view(), name='ml-anomaly-list'),
+    path('ml/model-info/', MLModelInfoAPIView.as_view(), name='ml-model-info'),
 
     # path('chat/', ChatbotView.as_view(), name='chatbot'),
 

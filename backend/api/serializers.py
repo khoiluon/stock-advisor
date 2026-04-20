@@ -1,6 +1,10 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers, validators
-from .models import Stock, Watchlist, StockData, Alert, PotentialStock, Article, ChatSession, ChatMessage
+from .models import (
+    Stock, Watchlist, StockData, Alert, PotentialStock, Article,
+    ChatSession, ChatMessage,
+    MLStock, MLModel, MLPrediction, AnomalyAlert, MarketState,
+)
 
 class RegisterSerializer(serializers.ModelSerializer):
     class Meta:
@@ -122,3 +126,51 @@ class ChatSessionSerializer(serializers.ModelSerializer):
         model = ChatSession
         fields = ['id', 'user', 'created_at', 'updated_at', 'messages']
         read_only_fields = ['user']
+
+
+# ==============================================================================
+# ML Serializers
+# ==============================================================================
+
+class MLStockSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MLStock
+        fields = ('ticker', 'company_name', 'exchange', 'industry')
+
+
+class MLModelInfoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MLModel
+        fields = (
+            'id', 'name', 'model_type', 'version',
+            'features_used', 'metrics', 'trained_at', 'is_active',
+        )
+
+
+class MLPredictionSerializer(serializers.ModelSerializer):
+    stock = MLStockSerializer(read_only=True)
+
+    class Meta:
+        model = MLPrediction
+        fields = (
+            'id', 'stock', 'prediction_date', 'trend_class',
+            'trend_probability', 'target_price', 'stop_loss',
+            'confidence_score',
+        )
+
+
+class AnomalyAlertSerializer(serializers.ModelSerializer):
+    stock = MLStockSerializer(read_only=True)
+
+    class Meta:
+        model = AnomalyAlert
+        fields = (
+            'id', 'stock', 'detected_at', 'anomaly_type',
+            'anomaly_score', 'details',
+        )
+
+
+class MarketStateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MarketState
+        fields = ('id', 'date', 'state', 'confidence', 'details')

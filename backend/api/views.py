@@ -8,15 +8,16 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 import pandas as pd
-# import pandas_ta as ta
 from rest_framework import permissions
 from django.conf import settings
 # import google.generativeai as genai
 from .models import Stock, StockData, Watchlist, PotentialStock, Article, ChatSession, ChatMessage
+from .models import MLStock, MLModel, MLPrediction, AnomalyAlert, MarketState
 from .pagination import StandardResultsSetPagination
 from .serializers import (
     RegisterSerializer, StockSerializer, WatchlistSerializer,
-    ArticleSerializer, PotentialStockSerializer, StockDataSerializer, ChatSessionSerializer
+    ArticleSerializer, PotentialStockSerializer, StockDataSerializer, ChatSessionSerializer,
+    MLPredictionSerializer, AnomalyAlertSerializer, MarketStateSerializer, MLModelInfoSerializer,
 )
 # Import hàm lấp đầy khoảng trống
 from ssi_integration.services import update_historical_data
@@ -151,7 +152,7 @@ class StockDataAPIView(APIView):
             for col in ohlcv_columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
 
-            # BƯỚC 4: Tính toán các chỉ báo kỹ thuật bằng pandas_ta
+            # BƯỚC 4: Tính toán các chỉ báo kỹ thuật bằng pandas-ta-classic
             # Thư viện này tự động tìm các cột 'open', 'high', 'low', 'close', 'volume'
             # df.ta.macd(fast=12, slow=26, signal=9, append=True)
             # df.ta.rsi(length=14, append=True)
@@ -266,3 +267,135 @@ class StockDataAPIView(APIView):
 #
 #         {context_data}
 #         """
+
+
+# ==============================================================================
+# ML PREDICTION VIEWS
+# ==============================================================================
+
+class MLPredictionListAPIView(generics.ListAPIView):
+    """
+    GET /api/ml/predictions/
+    Latest predictions, filter by ?trend=UP&min_confidence=70&exchange=HOSE
+    """
+    serializer_class = MLPredictionSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
+
+    def get_queryset(self):
+        latest_date = (
+            MLPrediction.objects.order_by('-prediction_date')
+            .values_list('prediction_date', flat=True)
+            .first()
+        )
+        if not latest_date:
+            return MLPrediction.objects.none()
+
+        qs = MLPrediction.objects.filter(prediction_date=latest_date).select_related('stock')
+
+        trend = self.request.query_params.get('trend')
+        if trend:
+            qs = qs.filter(trend_class=trend.upper())
+
+        min_confidence = self.request.query_params.get('min_confidence')
+        if min_confidence:
+            try:
+                qs = qs.filter(confidence_score__gte=int(min_confidence))
+            except (ValueError, TypeError):
+                pass
+
+        exchange = self.request.query_params.get('exchange')
+        if exchange:
+            qs = qs.filter(stock__exchange=exchange.upper())
+
+        return qs
+
+
+class MLPredictionDetailAPIView(APIView):
+    """
+    GET /api/ml/predictions/<ticker>/
+    Latest prediction detail cho 1 mã.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, ticker):
+        obj = (
+            MLPrediction.objects
+            .filter(stock__ticker=ticker.upper())
+            .select_related('stock')
+            .order_by('-prediction_date')
+            .first()
+        )
+        if obj is None:
+            return Response(
+                {"detail": "No prediction found for this ticker."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(MLPredictionSerializer(obj).data)
+
+
+class MarketStateAPIView(APIView):
+    """
+    GET /api/ml/market-state/
+    Current market state + 30-day history.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        days = request.query_params.get('days', 30)
+        try:
+            days = int(days)
+        except (ValueError, TypeError):
+            days = 30
+
+        states = MarketState.objects.order_by('-date')[:days]
+        current = states.first() if states.exists() else None
+
+        return Response({
+            'current': MarketStateSerializer(current).data if current else None,
+            'history': MarketStateSerializer(states, many=True).data,
+        })
+
+
+class AnomalyAlertListAPIView(generics.ListAPIView):
+    """
+    GET /api/ml/anomalies/
+    Latest anomaly alerts, filter by ?type=volume_spike&days=7
+    """
+    serializer_class = AnomalyAlertSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
+
+    def get_queryset(self):
+        qs = AnomalyAlert.objects.select_related('stock').order_by('-detected_at')
+
+        anomaly_type = self.request.query_params.get('type')
+        if anomaly_type:
+            qs = qs.filter(anomaly_type=anomaly_type)
+
+        days = self.request.query_params.get('days', 7)
+        try:
+            days = int(days)
+        except (ValueError, TypeError):
+            days = 7
+
+        from django.utils import timezone as tz
+        from datetime import timedelta
+        qs = qs.filter(detected_at__gte=tz.now() - timedelta(days=days))
+
+        return qs
+
+
+class MLModelInfoAPIView(APIView):
+    """
+    GET /api/ml/model-info/
+    Active model metadata & metrics.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        active_models = MLModel.objects.filter(is_active=True)
+        return Response({
+            'total_active_models': active_models.count(),
+            'models': MLModelInfoSerializer(active_models, many=True).data,
+        })

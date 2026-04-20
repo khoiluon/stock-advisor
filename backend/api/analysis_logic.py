@@ -1,5 +1,5 @@
 import pandas as pd
-import pandas_ta as ta
+import pandas_ta_classic as ta
 import decimal
 import numpy as np
 from scipy.signal import argrelextrema
@@ -43,8 +43,8 @@ def run_analysis_on_data(df_all, scan_full_history=False):
         if len(df_stock) < MIN_DATA_POINTS:
             continue
 
-        # Nhân với 1000 để quy đổi đơn vị giá cho đúng
-        df_stock['trade_value'] = df_stock['close'] * 1000 * df_stock['volume']
+        # Nhân với không nhân với 1000 để quy đổi đơn vị giá cho đúng
+        df_stock['trade_value'] = df_stock['close']  * df_stock['volume']
         avg_trade_value_20d = df_stock['trade_value'].rolling(window=20).mean().iloc[-1]
         if pd.isna(avg_trade_value_20d) or avg_trade_value_20d < MIN_AVG_TRADE_VALUE:
             continue
