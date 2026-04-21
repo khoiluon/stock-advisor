@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from datetime import datetime
 from urllib.parse import urljoin
 
-from celery import shared_task
+from celery import shared_task, chain
 from firecrawl import FirecrawlApp
 from bs4 import BeautifulSoup
 from django.utils import timezone
@@ -623,3 +623,15 @@ def run_ml_predictions_task():
     """
     from django.core.management import call_command
     call_command("run_ml_predictions")
+
+
+@shared_task(name="api.tasks.run_evening_ml_pipeline_task")
+def run_evening_ml_pipeline_task():
+    """Điều phối pipeline buổi tối: sync today xong mới chạy prediction."""
+    workflow = chain(
+        sync_ohlc_history_task.si(),
+        run_ml_predictions_task.si(),
+    )
+    result = workflow.apply_async()
+    logger.info(f"Đã enqueue evening ML pipeline chain: root_id={result.id}")
+    return f"enqueued_chain:{result.id}"

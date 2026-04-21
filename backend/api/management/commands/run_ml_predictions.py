@@ -212,6 +212,12 @@ class Command(BaseCommand):
         adj_factors = self._get_adj_factors()
         current_adtv = self._get_current_adtv()
 
+        # Xoá PotentialStock cũ cho hôm nay trước khi ghi mới
+        # (tránh dữ liệu stale từ lần chạy trước với model version khác)
+        deleted_count, _ = PotentialStock.objects.filter(analysis_date=today).delete()
+        if deleted_count:
+            self.stdout.write(f"  Cleaned {deleted_count} old PotentialStock records for {today}")
+
         saved_ml = 0
         saved_ps = 0
         skipped_liquidity = 0
@@ -254,8 +260,8 @@ class Command(BaseCommand):
             )
             saved_ml += 1
 
-            # Backward compat: save UP≥60% to PotentialStock (with liquidity filter)
-            if trend == 'UP' and confidence >= 60:
+            # Backward compat: save UP≥50% to PotentialStock (with liquidity filter)
+            if trend == 'UP' and confidence >= 50:
                 # Liquidity gate: skip stocks with low current ADTV
                 adtv = current_adtv.get(ticker, 0)
                 if adtv < MIN_ADTV:
@@ -271,14 +277,20 @@ class Command(BaseCommand):
                     f"ML Prediction: {trend} ({confidence}% confidence). "
                     f"UP: {proba['UP']:.1%}, DOWN: {proba['DOWN']:.1%}, SIDEWAY: {proba['SIDEWAY']:.1%}"
                 )
+                # current_price = adj_close converted to raw
+                adj_current = float(row.get('adj_close', 0)) if 'adj_close' in row.index else 0
+                raw_current = adj_current / adj_factor if adj_factor > 0 else adj_current
+
                 PotentialStock.objects.update_or_create(
                     stock=stock,
-                    date=today,
+                    analysis_date=today,
                     defaults={
+                        'current_price': round(raw_current, 2),
                         'target_price': round(raw_target, 2),
                         'stop_loss': round(raw_stop, 2),
                         'key_reasons': key_reasons,
-                        'confidence_score': confidence,
+                        'confidence': confidence,
+                        'timeframe': 'ML',
                     }
                 )
                 saved_ps += 1
@@ -297,16 +309,15 @@ class Command(BaseCommand):
         adtv = {}
         with connection.cursor() as cursor:
             cursor.execute("""
-                SELECT s.ticker, AVG(d.close * d.volume) AS adtv_20
+                SELECT d.stock_id AS ticker, AVG(d.close * d.volume) AS adtv_20
                 FROM api_mlstockdata d
-                INNER JOIN api_mlstock s ON d.stock_id = s.id
                 INNER JOIN (
                     SELECT stock_id, MAX(date) AS max_date
                     FROM api_mlstockdata
                     GROUP BY stock_id
                 ) latest ON d.stock_id = latest.stock_id
                 WHERE d.date > DATE_SUB(latest.max_date, INTERVAL 30 DAY)
-                GROUP BY s.ticker
+                GROUP BY d.stock_id
             """)
             for ticker, avg_tv in cursor.fetchall():
                 if avg_tv is not None:

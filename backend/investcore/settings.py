@@ -204,17 +204,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "api.tasks.crawl_news_task",
         "schedule": 1800.0,  # 30 phút
     },
-    # 18:00 — Sync OHLCV từ SSI (market đóng 15:00, data sẵn sàng ~16:30)
-    "sync-ml-ohlc-after-market-close": {
-        "task": "api.tasks.sync_ohlc_history_task",
+    # 18:00 (Asia/Ho_Chi_Minh) — chạy chuỗi: sync today -> prediction.
+    # Prediction chỉ chạy khi sync hoàn tất thành công.
+    "run-evening-ml-pipeline": {
+        "task": "api.tasks.run_evening_ml_pipeline_task",
         "schedule": crontab(hour=18, minute=0, day_of_week="mon-fri"),
-        "options": {"expires": 7200},
-    },  
-    # 19:00 — ML pipeline Phase 5: export → features → predict → save → anomaly → market state
-    # Chạy sau sync ~1h để đảm bảo data đã sync xong
-    "run-daily-ml-prediction": {
-        "task": "api.tasks.run_ml_predictions_task",
-        "schedule": crontab(hour=19, minute=0, day_of_week="mon-fri"),
         "options": {"expires": 7200},
     },
 }

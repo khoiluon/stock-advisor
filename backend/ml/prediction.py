@@ -13,6 +13,7 @@ from typing import Dict, List, Optional
 from .config import (
     ALL_FEATURES,
     LABEL_MAP_INV,
+    MODEL_VERSION,
     MODELS_DIR,
     TBM_ATR_PERIOD,
     TBM_SL_MULTIPLIER,
@@ -25,7 +26,7 @@ from .utils import prepare_xy
 def predict_latest(
     df_features: pd.DataFrame,
     models: Optional[List[Dict]] = None,
-    version: str = "v1",
+    version: str = MODEL_VERSION,
 ) -> pd.DataFrame:
     """
     Chạy inference cho ngày mới nhất của mỗi mã.
@@ -86,6 +87,7 @@ def predict_latest(
     output = pd.DataFrame({
         "stock_id": df_valid["stock_id"].values,
         "date": df_valid["date"].values,
+        "adj_close": close,
         "trend_class": [LABEL_MAP_INV[c] for c in pred_class],
         "trend_probability": [
             {"UP": round(float(p[0]), 4), "DOWN": round(float(p[1]), 4), "SIDEWAY": round(float(p[2]), 4)}

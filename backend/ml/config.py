@@ -15,6 +15,9 @@ FEATURES_PATH = DATA_DIR / 'features' / 'features.parquet'
 MARKET_STATE_PATH = DATA_DIR / 'features' / 'market_state.parquet'
 MODELS_DIR = DATA_DIR / 'models'
 
+# Active model version — thay đổi ở đây khi retrain/tune
+MODEL_VERSION = 'v3'
+
 # Đảm bảo thư mục tồn tại
 for d in [DATA_DIR / 'raw', DATA_DIR / 'features', MODELS_DIR]:
     d.mkdir(parents=True, exist_ok=True)
@@ -194,4 +197,4 @@ BACKTEST_POSITION_SIZE = 0.10           # 10% per position
 BACKTEST_MAX_POSITIONS = 10
 BACKTEST_SLIPPAGE = 0.002               # 0.2%
 BACKTEST_COMMISSION = 0.0025            # 0.25% per side
-BACKTEST_MIN_CONFIDENCE = 60            # Chỉ trade khi confidence >= 60%
+BACKTEST_MIN_CONFIDENCE = 50            # Chỉ trade khi confidence >= 50%

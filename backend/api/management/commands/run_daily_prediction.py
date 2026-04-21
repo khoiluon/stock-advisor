@@ -174,18 +174,24 @@ class Command(BaseCommand):
                 f"UP: {proba['UP']:.1%}, DOWN: {proba['DOWN']:.1%}, SIDEWAY: {proba['SIDEWAY']:.1%}"
             )
 
-            # Chỉ lưu mã có xu hướng UP với confidence >= 60%
-            if trend != 'UP' or confidence < 60:
+            # Chỉ lưu mã có xu hướng UP với confidence >= 50%
+            if trend != 'UP' or confidence < 50:
                 continue
+
+            # current_price = adj_close converted to raw
+            adj_current = float(row.get('adj_close', 0)) if 'adj_close' in row.index else 0
+            raw_current = adj_current / adj_factor if adj_factor > 0 else adj_current
 
             PotentialStock.objects.update_or_create(
                 stock=stock,
-                date=today,
+                analysis_date=today,
                 defaults={
+                    'current_price': round(raw_current, 2),
                     'target_price': round(raw_target, 2),
                     'stop_loss': round(raw_stop, 2),
                     'key_reasons': key_reasons,
-                    'confidence_score': confidence,
+                    'confidence': confidence,
+                    'timeframe': 'ML',
                 }
             )
             saved += 1

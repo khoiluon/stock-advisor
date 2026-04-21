@@ -97,6 +97,7 @@ class PotentialStockSerializer(serializers.ModelSerializer):
             'analysis_date',
             'current_price',
             'target_price',
+            'stop_loss',
             'timeframe',
             'confidence',
             'score',

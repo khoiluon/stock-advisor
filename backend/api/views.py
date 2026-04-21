@@ -87,13 +87,33 @@ class StockScreenerAPIView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        latest_date = PotentialStock.objects.order_by('-analysis_date').values_list('analysis_date', flat=True).first()
-        if not latest_date:
+        date_param = self.request.query_params.get('date')
+        if date_param:
+            target_date = date_param
+        else:
+            target_date = PotentialStock.objects.order_by('-analysis_date').values_list('analysis_date', flat=True).first()
+        if not target_date:
             return PotentialStock.objects.none()
-        queryset = PotentialStock.objects.filter(analysis_date=latest_date)
+        queryset = PotentialStock.objects.filter(analysis_date=target_date).select_related('stock')
+
+        # Filter by confidence
+        min_confidence = self.request.query_params.get('min_confidence')
+        if min_confidence:
+            try:
+                queryset = queryset.filter(confidence__gte=int(min_confidence))
+            except (ValueError, TypeError):
+                pass
+
+        # Filter by exchange
+        exchange = self.request.query_params.get('exchange')
+        if exchange:
+            queryset = queryset.filter(stock__exchange=exchange.upper())
+
+        # Backward compat: filter by timeframe
         timeframe = self.request.query_params.get('timeframe', None)
         if timeframe:
             queryset = queryset.filter(timeframe=timeframe)
+
         return queryset
 
 
