@@ -29,8 +29,7 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
       MYSQL_DATABASE: ${DB_NAME}
-    # ❌ KHÔNG expose port ra host (bảo mật)
-    # Chỉ các container trong cùng network mới truy cập được
+      MYSQL_USER: ${DB_USER:-root}
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -48,7 +47,6 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    # ❌ KHÔNG expose port ra host (bảo mật)
     volumes:
       - redis_data:/data
     healthcheck:
@@ -67,27 +65,34 @@ services:
       context: ./backend
       dockerfile: Dockerfile.prod
     command: daphne -b 0.0.0.0 -p 8000 investcore.asgi:application
-    # ❌ KHÔNG có volumes mount code (code đã COPY vào image)
-    # ❌ KHÔNG expose port ra host (Nginx sẽ proxy)
     volumes:
-      # Shared volume cho Django static files (Nginx serve)
       - static_files:/app/staticfiles
     env_file:
+      - .env
       - ./backend/.env.prod
     environment:
-      # Override để dùng tên service Docker thay vì localhost
       - DB_HOST=db
       - DB_PORT=3306
       - REDIS_URL=redis://redis:6379/0
       - CHANNEL_REDIS_HOST=redis
       - RUN_MIGRATIONS=true
+      # ✅ Derive từ EC2_PUBLIC_IP — chỉ điền IP 1 lần trong .env
+      - ALLOWED_HOSTS=${EC2_PUBLIC_IP},backend,localhost,127.0.0.1
+      - CORS_ALLOWED_ORIGINS=http://${EC2_PUBLIC_IP}
+      - CSRF_TRUSTED_ORIGINS=http://${EC2_PUBLIC_IP}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/admin/')"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/admin/')",
+        ]
       interval: 15s
       timeout: 10s
       retries: 5
@@ -104,8 +109,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile.prod
     command: celery -A investcore worker -l info -P gevent -c 4
-    # ❌ KHÔNG có volumes mount code
     env_file:
+      - .env
       - ./backend/.env.prod
     environment:
       - DB_HOST=db
@@ -113,6 +118,9 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CHANNEL_REDIS_HOST=redis
       - CELERY_TASK_ALWAYS_EAGER=False
+      - ALLOWED_HOSTS=${EC2_PUBLIC_IP},backend,localhost,127.0.0.1
+      - CORS_ALLOWED_ORIGINS=http://${EC2_PUBLIC_IP}
+      - CSRF_TRUSTED_ORIGINS=http://${EC2_PUBLIC_IP}
     depends_on:
       backend:
         condition: service_healthy
@@ -130,8 +138,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile.prod
     command: celery -A investcore beat -l info -S django
-    # ❌ KHÔNG có volumes mount code
     env_file:
+      - .env
       - ./backend/.env.prod
     environment:
       - DB_HOST=db
@@ -139,6 +147,9 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CHANNEL_REDIS_HOST=redis
       - CELERY_TASK_ALWAYS_EAGER=False
+      - ALLOWED_HOSTS=${EC2_PUBLIC_IP},backend,localhost,127.0.0.1
+      - CORS_ALLOWED_ORIGINS=http://${EC2_PUBLIC_IP}
+      - CSRF_TRUSTED_ORIGINS=http://${EC2_PUBLIC_IP}
     depends_on:
       backend:
         condition: service_healthy
@@ -151,21 +162,16 @@ services:
   # ===========================================================
   # NGINX — Reverse Proxy + React Static Files
   # ===========================================================
-  # Nginx serve React (từ image) + proxy API/WebSocket đến Backend
-  # Frontend KHÔNG có container riêng — React files được build
-  # trực tiếp vào Nginx image (multi-stage Dockerfile)
-  # ===========================================================
   nginx:
     build:
       context: .
       dockerfile: nginx/Dockerfile
       args:
-        - VITE_API_URL=${VITE_API_URL:-http://localhost/api}
-        - VITE_WS_URL=${VITE_WS_URL:-ws://localhost/ws}
+        - VITE_API_URL=http://${EC2_PUBLIC_IP}/api
+        - VITE_WS_URL=ws://${EC2_PUBLIC_IP}/ws
     ports:
       - "80:80"
     volumes:
-      # Shared volume: Backend write → Nginx read Django static files
       - static_files:/usr/share/nginx/static:ro
     depends_on:
       backend:
@@ -175,17 +181,14 @@ services:
       - app-network
 
 # ===========================================================
-# NETWORK — Tất cả services cùng 1 network
-# ===========================================================
-# Container gọi nhau bằng tên service (db, redis, backend, ...)
-# Không cần port mapping — tất cả giao tiếp nội bộ
+# NETWORK
 # ===========================================================
 networks:
   app-network:
     driver: bridge
 
 # ===========================================================
-# VOLUMES — Dữ liệu bền vững
+# VOLUMES
 # ===========================================================
 volumes:
   mysql_data:
