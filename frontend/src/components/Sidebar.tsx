@@ -1,4 +1,4 @@
-import { FiBarChart2, FiCpu, FiFileText, FiStar, FiTrendingUp } from "react-icons/fi";
+import { FiBarChart2, FiFileText, FiStar, FiTrendingUp } from "react-icons/fi";
 import { NavLink, useNavigate } from "react-router-dom";
 import Card from "./ui/Card";
 import { Button } from "./ui/Button";
@@ -42,7 +42,7 @@ export default function Sidebar() {
 							}
 						>
 							{" "}
-							<FiCpu className="mr-2" /> ML Predictions{" "}
+							<FiTrendingUp className="mr-2" /> Stock Suggestions{" "}
 						</NavLink>
 					</li>
 					<li>

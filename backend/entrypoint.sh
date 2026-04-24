@@ -1,11 +1,12 @@
 #!/bin/bash
 # ============================================================
-# Entrypoint script cho Backend container
+# Entrypoint script cho Backend container (Production)
 # ============================================================
 # Script này đảm bảo:
 # 1. Đợi MySQL sẵn sàng
 # 2. Chạy migrations (chỉ khi là backend service)
-# 3. Khởi động lệnh chính (daphne, celery worker, celery beat, ...)
+# 3. Collect static files cho Django Admin (chỉ khi là backend service)
+# 4. Khởi động lệnh chính (daphne, celery worker, celery beat, ...)
 
 set -e
 
@@ -29,12 +30,16 @@ except Exception as e:
     sleep 2
 done
 
-# --- Chạy migrations (chỉ cho backend service chính) ---
+# --- Chạy migrations + collectstatic (chỉ cho backend service chính) ---
 # Biến RUN_MIGRATIONS=true chỉ được set cho service backend trong docker-compose
 if [ "$RUN_MIGRATIONS" = "true" ]; then
     echo "🔄 Đang chạy database migrations..."
     python manage.py migrate --noinput
     echo "✅ Migrations hoàn tất!"
+
+    echo "🔄 Đang collect static files..."
+    python manage.py collectstatic --noinput
+    echo "✅ Collectstatic hoàn tất!"
 fi
 
 # --- Khởi động lệnh chính ---
