@@ -1,0 +1,58 @@
+# ============================================================
+# Backend Dockerfile — PRODUCTION (Django + Daphne + Celery)
+# ============================================================
+# Khác biệt so với Dockerfile dev:
+# - KHÔNG mount volume (code đã COPY vào image)
+# - Có collectstatic cho Django Admin
+# - Sử dụng .dockerignore để loại bỏ file thừa
+# ============================================================
+
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# --- Cài đặt system dependencies ---
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        pkg-config \
+        default-libmysqlclient-dev \
+        wget \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# --- Cài đặt TA-Lib C Library ---
+RUN wget -q https://github.com/TA-Lib/ta-lib/releases/download/v0.6.4/ta-lib-0.6.4-src.tar.gz && \
+    tar -xzf ta-lib-0.6.4-src.tar.gz && \
+    cd ta-lib-0.6.4 && \
+    ./configure --prefix=/usr && \
+    make -j$(nproc) && \
+    make install && \
+    ldconfig && \
+    cd .. && \
+    rm -rf ta-lib-0.6.4 ta-lib-0.6.4-src.tar.gz
+
+WORKDIR /app
+
+# --- Copy và cài Python dependencies trước (tận dụng Docker cache) ---
+COPY ssi_fc_data-2.2.2.tar.gz /app/ssi_fc_data-2.2.2.tar.gz
+COPY requirements.txt /app/
+RUN pip install --no-cache-dir -r requirements.txt
+
+# --- Copy toàn bộ source code ---
+# (Không có volume mount — code bất biến trong production)
+COPY . /app/
+
+# --- Cấu hình entrypoint script ---
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+# --- Mở port ---
+EXPOSE 8000
+
+# --- Entrypoint: đợi DB + migrate + collectstatic ---
+ENTRYPOINT ["/app/entrypoint.sh"]
+
+# --- Lệnh mặc định: chạy Daphne ASGI server ---
+CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "investcore.asgi:application"]
