@@ -23,9 +23,7 @@ export const useStockDataFeed = (store: StockDashboardStore) => {
 	// 1. Update WebSocket URL when ticker changes
 	useEffect(() => {
 		if (ticker) {
-			setSocketUrl(
-				`${import.meta.env.VITE_WS_URL || "ws://127.0.0.1:8000"}/ws/stock/${ticker}/`,
-			);
+			setSocketUrl(`${import.meta.env.VITE_WS_URL}/stock/${ticker}/`);
 		}
 	}, [ticker]);
 

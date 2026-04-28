@@ -1,5 +1,22 @@
+# ============================================================
+# Frontend .dockerignore
+# ============================================================
+# Loại bỏ file không cần thiết khỏi Docker build context
+# ============================================================
+
 node_modules
 npm-debug.log
+yarn-error.log
 build
 dist
 .git
+.DS_Store
+Thumbs.db
+
+# Bun lockfile (dùng NPM trong Docker)
+bun.lock
+
+# Environment files (không đưa vào image)
+.env
+.env.*
+!.env.example

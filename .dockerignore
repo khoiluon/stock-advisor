@@ -1,0 +1,38 @@
+# ============================================================
+# Root .dockerignore
+# ============================================================
+# Dùng cho nginx build context (context: .)
+# Loại bỏ những file không cần thiết khi build Nginx + Frontend
+# ============================================================
+
+# Backend (không cần cho nginx/frontend build)
+backend/
+
+# Git
+.git/
+.github/
+
+# Docker files
+docker-compose.yml
+docker-compose.prod.yml
+
+# Documentation
+*.md
+
+# Environment files (không đưa vào image)
+.env
+.env.*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+
+# Frontend files không cần thiết
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.*
