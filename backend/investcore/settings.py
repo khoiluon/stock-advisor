@@ -130,9 +130,10 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+_cors_origins = env("CORS_ALLOWED_ORIGINS", default="")
 CORS_ALLOWED_ORIGINS = (
-    env("CORS_ALLOWED_ORIGINS", default="").split(",")
-    if env("CORS_ALLOWED_ORIGINS")
+    [o.strip() for o in _cors_origins.split(",") if o.strip()]
+    if _cors_origins
     else [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
@@ -143,9 +144,10 @@ CORS_ALLOWED_ORIGINS = (
     ]
 )
 
+_csrf_origins = env("CSRF_TRUSTED_ORIGINS", default="")
 CSRF_TRUSTED_ORIGINS = (
-    env("CSRF_TRUSTED_ORIGINS", default="").split(",")
-    if env("CSRF_TRUSTED_ORIGINS")
+    [o.strip() for o in _csrf_origins.split(",") if o.strip()]
+    if _csrf_origins
     else [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
@@ -155,6 +157,7 @@ CSRF_TRUSTED_ORIGINS = (
         "http://127.0.0.1:8000",
     ]
 )
+
 
 # CẤU HÌNH CHO DJANGO REST FRAMEWORK
 REST_FRAMEWORK = {
@@ -174,7 +177,7 @@ REST_FRAMEWORK = {
 LANGUAGE_CODE = "en-us"
 
 
-TIME_ZONE = 'Asia/Ho_Chi_Minh'
+TIME_ZONE = "Asia/Ho_Chi_Minh"
 USE_I18N = True
 
 USE_TZ = True
