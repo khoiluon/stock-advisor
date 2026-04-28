@@ -39,11 +39,7 @@ SECRET_KEY = config("SECRET_KEY")
 
 DEBUG = config("DEBUG", default=False, cast=bool)
 
-<<<<<<< HEAD
-ALLOWED_HOSTS = config(
-=======
 ALLOWED_HOSTS = env(
->>>>>>> hiepdangcode
     "ALLOWED_HOSTS", default="localhost,127.0.0.1,backend,0.0.0.0"
 ).split(",")
 
@@ -134,25 +130,6 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-<<<<<<< HEAD
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://frontend:3000",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://frontend:5173",
-]
-
-CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-]
-=======
 CORS_ALLOWED_ORIGINS = (
     env("CORS_ALLOWED_ORIGINS", default="").split(",")
     if env("CORS_ALLOWED_ORIGINS")
@@ -178,7 +155,6 @@ CSRF_TRUSTED_ORIGINS = (
         "http://127.0.0.1:8000",
     ]
 )
->>>>>>> hiepdangcode
 
 # CẤU HÌNH CHO DJANGO REST FRAMEWORK
 REST_FRAMEWORK = {
@@ -196,11 +172,7 @@ REST_FRAMEWORK = {
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
 LANGUAGE_CODE = "en-us"
-<<<<<<< HEAD
-=======
 
-TIME_ZONE = "UTC"
->>>>>>> hiepdangcode
 
 TIME_ZONE = 'Asia/Ho_Chi_Minh'
 USE_I18N = True
@@ -212,10 +184,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = "static/"
-<<<<<<< HEAD
-=======
 STATIC_ROOT = BASE_DIR / "staticfiles"
->>>>>>> hiepdangcode
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -244,7 +213,6 @@ CELERY_BEAT_SCHEDULE = {
     "crawl-news-every-30-minutes": {
         "task": "api.tasks.crawl_news_task",
         "schedule": 1800.0,  # 30 phút
-<<<<<<< HEAD
     },
     # 18:00 (Asia/Ho_Chi_Minh) — chạy chuỗi: sync today -> prediction.
     # Prediction chỉ chạy khi sync hoàn tất thành công.
@@ -252,8 +220,6 @@ CELERY_BEAT_SCHEDULE = {
         "task": "api.tasks.run_evening_ml_pipeline_task",
         "schedule": crontab(hour=18, minute=0, day_of_week="mon-fri"),
         "options": {"expires": 7200},
-=======
->>>>>>> hiepdangcode
     },
 }
 
