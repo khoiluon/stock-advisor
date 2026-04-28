@@ -12,7 +12,6 @@ export const endpoint = {
 		add: "/watchlist/",
 		delete: (id: string) => `/watchlist/${id}/`,
 	},
-<<<<<<< HEAD
 	screener: "/screener/",
 	ml: {
 		predictions: "/ml/predictions/",
@@ -21,6 +20,4 @@ export const endpoint = {
 		anomalies: "/ml/anomalies/",
 		modelInfo: "/ml/model-info/",
 	},
-=======
->>>>>>> hiepdangcode
 };
