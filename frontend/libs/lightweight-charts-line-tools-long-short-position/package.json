@@ -21,11 +21,9 @@
     "take profit",
     "trade planning",
     "position sizing"
-  ],  
+  ],
   "scripts": {
-    "build": "rollup -c && typedoc",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "prepare": "npm run build"
   },
   "author": "difurious",
   "license": "MPL-2.0",

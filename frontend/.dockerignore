@@ -15,6 +15,7 @@ Thumbs.db
 
 # Bun lockfile (dùng NPM trong Docker)
 bun.lock
+package-lock.json
 
 # Environment files (không đưa vào image)
 .env
