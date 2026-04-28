@@ -56,7 +56,7 @@ function Login() {
                         <input
                             type="text"
                             name="username"
-                            placeholder="Enter your email"
+                            placeholder="Enter your name"
                             onChange={handleChange}
                             required
                             className="w-full pl-10 pr-3 py-2 rounded-lg bg-[#232e43] text-white border-none focus:ring-2 focus:ring-blue-500 outline-none"
