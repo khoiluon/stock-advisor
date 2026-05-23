@@ -19,6 +19,7 @@ from .config import (
     LABEL_COL,
     LABEL_MAP,
     LGBM_PARAMS,
+    MODEL_VERSION,
     MODELS_DIR,
     NUM_SUBSETS,
     STRIDE,
@@ -68,7 +69,7 @@ class TrendModelTrainer:
     def train_ensemble(
         self,
         df_labeled: pd.DataFrame,
-        version: str = "v1",
+        version: str = MODEL_VERSION,
     ) -> List[Dict]:
         """
         Full train pipeline:
@@ -183,7 +184,7 @@ class TrendModelTrainer:
 # ------------------------------------------------------------------
 # Convenience: load saved ensemble từ MODELS_DIR
 # ------------------------------------------------------------------
-def load_ensemble(models_dir: Path = MODELS_DIR, version: str = "v1") -> List[Dict]:
+def load_ensemble(models_dir: Path = MODELS_DIR, version: str = MODEL_VERSION) -> List[Dict]:
     """Load tất cả model files matching version từ MODELS_DIR."""
     models_dir = Path(models_dir)
     pattern = f"*_{version}.joblib"

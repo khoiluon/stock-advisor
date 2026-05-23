@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pandas as pd
 
-from ml.config import FEATURES_PATH, MODELS_DIR
+from ml.config import FEATURES_PATH, MODEL_VERSION, MODELS_DIR
 from ml.evaluation import evaluate_ensemble, plot_confusion_matrix, plot_feature_importance
 from ml.training import TrendModelTrainer
 from ml.utils import chronological_split, load_features
@@ -38,10 +38,10 @@ def main():
     df_train, df_test = chronological_split(df)
 
     print("\n" + "=" * 60)
-    print("STEP 3: Train ensemble (20 models = 10 subsets × 2 algos)")
+    print(f"STEP 3: Train ensemble (20 models = 10 subsets × 2 algos)  [version={MODEL_VERSION}]")
     print("=" * 60)
     trainer = TrendModelTrainer()
-    artifacts = trainer.train_ensemble(df_train, version="v1")
+    artifacts = trainer.train_ensemble(df_train, version=MODEL_VERSION)
 
     print("\n" + "=" * 60)
     print("STEP 4: Evaluate on holdout test set (2025+)")
@@ -66,7 +66,7 @@ def main():
     plot_confusion_matrix(
         y_test.values,
         metrics["ensemble_pred"],
-        save_path=plots_dir / "confusion_matrix_v1.png",
+        save_path=plots_dir / f"confusion_matrix_{MODEL_VERSION}.png",
     )
 
     # Feature importance từ model đầu tiên LightGBM
@@ -76,7 +76,7 @@ def main():
             lgbm_artifact["model"],
             feature_names=feature_cols,
             top_n=20,
-            save_path=plots_dir / "feature_importance_v1.png",
+            save_path=plots_dir / f"feature_importance_{MODEL_VERSION}.png",
         )
 
     print(f"\n=== Final Result ===")

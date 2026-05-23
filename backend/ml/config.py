@@ -16,7 +16,8 @@ MARKET_STATE_PATH = DATA_DIR / 'features' / 'market_state.parquet'
 MODELS_DIR = DATA_DIR / 'models'
 
 # Active model version — thay đổi ở đây khi retrain/tune
-MODEL_VERSION = 'v3'
+# v4: TBM_TP_MULTIPLIER=1.0 (R:R 1:1), same-day TP+SL hit → NaN (loại khỏi training)
+MODEL_VERSION = 'v4'
 
 # Đảm bảo thư mục tồn tại
 for d in [DATA_DIR / 'raw', DATA_DIR / 'features', MODELS_DIR]:
@@ -41,7 +42,7 @@ ZERO_VOL_LOOKBACK = 60        # Số ngày nhìn lại tính zero volume ratio
 # ==============================================================================
 # TRIPLE BARRIER METHOD
 # ==============================================================================
-TBM_TP_MULTIPLIER = 1.5      # Take Profit = 1.5 × ATR (R:R = 1:1.5)
+TBM_TP_MULTIPLIER = 1.0      # Take Profit = 1.0 × ATR (R:R = 1:1) — v4: hạ ngưỡng để tăng tỷ lệ UP/DOWN, giảm SIDEWAY
 TBM_SL_MULTIPLIER = 1.0      # Stop Loss = 1 × ATR
 TBM_TIME_LIMIT = 10           # 10 trading days
 TBM_ATR_PERIOD = 14

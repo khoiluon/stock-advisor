@@ -9,10 +9,14 @@ Logic (De Prado):
 - Quét forward từ T+1 → T+10:
   + Nếu adj_high chạm TP TRƯỚC khi adj_low chạm SL → UP
   + Nếu adj_low chạm SL TRƯỚC khi adj_high chạm TP → DOWN
+  + Cả hai chạm trong CÙNG 1 ngày → AMBIGUOUS → gán NaN (loại khỏi training thay vì
+    ép về DOWN gây bias dữ liệu).
   + Hết 10 ngày mà không chạm barrier nào → SIDEWAY
-- Drop 10 rows cuối mỗi stock (không đủ forward data).
+- Giữ nguyên rows có label=NaN (warmup ATR, 10 ngày cuối stock, ambiguous);
+  training pipeline sẽ dropna(label) trước khi fit.
 
-Output columns: label (int: 0=UP, 1=DOWN, 2=SIDEWAY), target_price (TP barrier), stop_loss (SL barrier)
+Output columns: label (nullable Int64: 0=UP, 1=DOWN, 2=SIDEWAY, <NA>=ambiguous/no-data),
+                target_price (TP barrier), stop_loss (SL barrier)
 """
 import numpy as np
 import pandas as pd
@@ -64,9 +68,10 @@ def _apply_tbm_single_stock(df: pd.DataFrame) -> pd.DataFrame:
             hit_sl = l[j] <= sl_barrier
 
             if hit_tp and hit_sl:
-                # Cả hai barrier đều bị chạm trong cùng 1 ngày
-                # Ưu tiên SL (conservative)
-                hit = LABEL_MAP['DOWN']
+                # Cả hai barrier cùng bị chạm trong 1 ngày — không thể xác định
+                # TP trước hay SL trước nếu chỉ có OHLC. Trước đây ép về DOWN gây
+                # bias label (over-count DOWN); giờ gán NaN để loại khỏi training.
+                hit = np.nan
                 break
             elif hit_tp:
                 hit = LABEL_MAP['UP']
@@ -82,9 +87,14 @@ def _apply_tbm_single_stock(df: pd.DataFrame) -> pd.DataFrame:
     df['target_price'] = target_prices
     df['stop_loss'] = stop_losses
 
-    # Drop rows không label được (cuối + warmup ATR NaN)
-    df = df.dropna(subset=['label']).copy()
-    df['label'] = df['label'].astype(int)
+    # KHÔNG dropna ở đây nữa (v4): giữ nguyên rows có label=NaN cho:
+    #   - warmup ATR (rows đầu)
+    #   - TBM_TIME_LIMIT rows cuối stock (không đủ forward data)
+    #   - ambiguous same-day TP+SL hit
+    # Training pipeline sẽ dropna(label) trước khi fit; backtest/walk-forward
+    # vẫn cần các rows này để biết feature tại thời điểm chưa label được.
+    # Dùng pandas nullable Int64 để giữ kiểu integer mà cho phép NA.
+    df['label'] = df['label'].astype('Int64')
 
     return df
 
@@ -121,14 +131,18 @@ def apply_triple_barrier(df: pd.DataFrame) -> pd.DataFrame:
 
     df_all = pd.concat(results, ignore_index=True)
 
-    # Thống kê phân bố label
-    counts = df_all['label'].value_counts().sort_index()
+    # Thống kê phân bố label — base = số rows có label (không tính NaN)
+    n_total = len(df_all)
+    n_na = int(df_all['label'].isna().sum())
+    n_labeled = n_total - n_na
+    counts = df_all['label'].value_counts(dropna=True).sort_index()
     label_inv = {v: k for k, v in LABEL_MAP.items()}
-    print(f"\nLabel distribution:")
+    print(f"\nLabel distribution (base = {n_labeled:,} labeled rows):")
     for lbl, cnt in counts.items():
-        pct = cnt / len(df_all) * 100
-        print(f"  {label_inv.get(lbl, lbl)}: {cnt:,} ({pct:.1f}%)")
-    print(f"  Total labeled: {len(df_all):,}")
+        pct = (cnt / n_labeled * 100) if n_labeled > 0 else 0.0
+        print(f"  {label_inv.get(int(lbl), lbl)}: {cnt:,} ({pct:.1f}%)")
+    print(f"  NaN  (warmup + last 10 rows + ambiguous): {n_na:,} ({n_na / n_total * 100:.1f}% of total)")
+    print(f"  Total rows kept: {n_total:,} (labeled + NaN)")
 
     return df_all
 

@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import argparse
 import pandas as pd
-from ml.config import FEATURES_PATH, MODELS_DIR, LABEL_COL
+from ml.config import FEATURES_PATH, MODELS_DIR, LABEL_COL, MODEL_VERSION
 from ml.evaluation import evaluate_classification, plot_confusion_matrix, plot_feature_importance
 from ml.training import TrendModelTrainer, load_ensemble
 from ml.utils import chronological_split, load_features, prepare_xy
@@ -34,8 +34,8 @@ def main(sample: bool = False):
     else:
         print(f"Full test: {len(df_test_clean):,} rows")
 
-    print("Loading models...")
-    artifacts = load_ensemble(MODELS_DIR, version="v1")
+    print(f"Loading models (version={MODEL_VERSION})...")
+    artifacts = load_ensemble(MODELS_DIR, version=MODEL_VERSION)
     feature_cols = artifacts[0]["features"]
 
     X_test, y_test = prepare_xy(df_test_clean, feature_cols=feature_cols)
@@ -56,7 +56,7 @@ def main(sample: bool = False):
 
     plot_confusion_matrix(
         y_test.values, pred,
-        save_path=plots_dir / "confusion_matrix_v1.png",
+        save_path=plots_dir / f"confusion_matrix_{MODEL_VERSION}.png",
     )
     lgbm = next((a for a in artifacts if a.get("algo") == "lightgbm"), None)
     if lgbm:
@@ -64,7 +64,7 @@ def main(sample: bool = False):
             lgbm["model"],
             feature_names=feature_cols,
             top_n=20,
-            save_path=plots_dir / "feature_importance_v1.png",
+            save_path=plots_dir / f"feature_importance_{MODEL_VERSION}.png",
         )
     print(f"\nPlots saved → {plots_dir}")
 
