@@ -33,7 +33,7 @@ Thumbs.db
 # === ML Data artifacts (large files) ===
 backend/data/raw/*.parquet
 backend/data/features/*.parquet
-backend/data/models/*.joblib
+
 backend/data/plots/*.png
 # Keep directory structure
 !backend/data/raw/.gitkeep

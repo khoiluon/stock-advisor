@@ -1,22 +1,3 @@
-"""
-sync_ohlc_history — Đồng bộ OHLCV + adj_close vào MLStockData từ daily_stock_price API.
-
-Ghi vào MLStockData (giá GỐC + adj_close) — KHÔNG phải StockData (giá đã adjusted cho biểu đồ).
-Chỉ gọi API cho stock_type='S' (ML eligible, ~1,813 mã).
-
-Chế độ INCREMENTAL mặc định:
-  - Tự detect MAX(date) per stock trong MLStockData
-  - Chỉ fetch từ MAX(date)+1 → hôm nay
-  - VCB có data đến 2025-12-19 → chỉ fetch từ 2025-12-20
-
-Usage:
-    python manage.py sync_ohlc_history                        # incremental (tự detect)
-    python manage.py sync_ohlc_history --from-date 2026-01-01 # từ ngày cụ thể
-    python manage.py sync_ohlc_history --from-date 2026-04-20 --to-date 2026-04-20
-    python manage.py sync_ohlc_history --ticker VCB           # chỉ 1 mã
-    python manage.py sync_ohlc_history --ticker VCB --from-date 2026-04-01
-    python manage.py sync_ohlc_history --dry-run              # chỉ thống kê
-"""
 import time
 from datetime import date as date_type, timedelta
 
@@ -36,11 +17,6 @@ CHUNK_DAYS = 28  # SSI API giới hạn ~30 ngày/request
 
 
 def _parse_stock_price_item(item, ticker):
-    """
-    Parse một bản ghi từ daily_stock_price API (có ClosePriceAdjusted).
-    Chỉ parse record khớp ticker (SSI API có thể trả về nhiều mã).
-    Return: (date, open, high, low, close, volume, adj_close) hoặc None.
-    """
     # Filter theo symbol — SSI API trả về data TOÀN BỘ market
     item_symbol = item.get('Symbol') or item.get('symbol') or ''
     if not item_symbol or item_symbol.upper() != ticker.upper():
@@ -73,8 +49,6 @@ def _parse_stock_price_item(item, ticker):
 
 
 class Command(BaseCommand):
-    help = 'Đồng bộ OHLCV + adj_close vào MLStockData (incremental, chỉ stock_type=S)'
-
     def add_arguments(self, parser):
         parser.add_argument(
             '--from-date', type=str, default=None,
@@ -276,12 +250,6 @@ class Command(BaseCommand):
                 self.stdout.write(f"    {t}: {e}")
 
     def _batch_fetch_date_range(self, client, config, from_date, to_date):
-        """
-        Fetch ALL stocks' daily_stock_price data in 1 API call per chunk.
-        SSI daily_stock_price trả toàn bộ market cho recent dates → tận dụng
-        để lấy ~4,400 symbols chỉ với 1 request thay vì 1,800 requests.
-        Return: dict[ticker] → [(date, o, h, l, c, vol, adj)]
-        """
         all_data = {}
         chunk_start = from_date
         chunk_num = 0
@@ -372,12 +340,6 @@ class Command(BaseCommand):
         return len(rows)
 
     def _sync_stock(self, client, config, ticker, from_date, to_date, dry_run):
-        """
-        Lấy OHLCV + adj_close từ daily_stock_price API cho 1 mã,
-        ghi vào MLStockData per chunk để theo dõi tiến độ.
-        SSI API giới hạn ~30 ngày/request → chia thành chunks.
-        Return: created_count
-        """
         # Đảm bảo MLStock record tồn tại
         try:
             ml_stock = MLStock.objects.get(ticker=ticker)

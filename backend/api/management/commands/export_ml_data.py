@@ -1,16 +1,3 @@
-"""
-Export dữ liệu từ MLStockData → Parquet cho ML pipeline.
-
-Quy trình:
-1. Query MLStockData JOIN MLStock (filter stock_type='S', date >= DATA_START_DATE)
-2. Tính adj_factor = adj_close / close
-3. Tính adjusted OHLCV: adj_open, adj_high, adj_low, adj_volume = volume / adj_factor
-4. Export ra Parquet file
-
-Usage:
-    python manage.py export_ml_data
-    python manage.py export_ml_data --start-date 2022-01-01
-"""
 import pandas as pd
 import numpy as np
 from django.core.management.base import BaseCommand

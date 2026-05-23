@@ -78,29 +78,45 @@ class Command(BaseCommand):
             return
 
         # ── Step 2: Compute Features ──
+        # df_feat_inference: full features WITHOUT TBM labeling (keeps latest rows for predict)
+        # features.parquet: WITH TBM labeling (drops last 10 rows per stock, used for training only)
+        df_feat_inference = None
         if not skip_features:
             self.stdout.write("\n[2/6] Computing features (~50 indicators per stock)...")
             try:
                 df = pd.read_parquet(RAW_DATA_PATH)
                 self.stdout.write(f"  Raw data: {len(df):,} rows, {df['stock_id'].nunique()} stocks")
-                df_feat = compute_features(df)
-                self.stdout.write(f"  Features computed: {df_feat.shape}")
+                df_feat_inference = compute_features(df)
+                self.stdout.write(f"  Features computed: {df_feat_inference.shape}")
 
-                df_labeled = create_labeled_dataset(df_feat)
+                # Save labeled version for training (TBM drops last TBM_TIME_LIMIT rows per stock)
+                df_labeled = create_labeled_dataset(df_feat_inference)
                 FEATURES_PATH.parent.mkdir(parents=True, exist_ok=True)
                 df_labeled.to_parquet(FEATURES_PATH, index=False)
-                self.stdout.write(f"  Saved → {FEATURES_PATH}")
+                self.stdout.write(f"  Saved labeled features → {FEATURES_PATH}")
+                self.stdout.write(f"  (Inference uses in-memory features: up to {df_feat_inference['date'].max()})")
             except Exception as e:
                 self.stderr.write(self.style.ERROR(f"Feature computation failed: {e}"))
                 return
         else:
             self.stdout.write("\n[2/6] Skipped features (--skip-features)")
 
-        if not FEATURES_PATH.exists():
-            self.stderr.write(self.style.ERROR(f"File not found: {FEATURES_PATH}"))
-            return
-
-        df_features = pd.read_parquet(FEATURES_PATH)
+        # For inference: use in-memory df_feat_inference (has latest rows).
+        # Fall back to features.parquet only when --skip-features was passed.
+        if df_feat_inference is not None:
+            df_features = df_feat_inference
+        else:
+            if not FEATURES_PATH.exists():
+                self.stderr.write(self.style.ERROR(f"File not found: {FEATURES_PATH}"))
+                return
+            df_features = pd.read_parquet(FEATURES_PATH)
+            self.stdout.write(
+                self.style.WARNING(
+                    f"  WARNING: Using labeled features.parquet for inference "
+                    f"(last ~{10} rows per stock are missing — predictions may use stale prices). "
+                    f"Run without --skip-features for accurate results."
+                )
+            )
 
         # ── Step 3: Run Prediction ──
         self.stdout.write("\n[3/6] Running ML ensemble prediction...")
@@ -180,6 +196,11 @@ class Command(BaseCommand):
     # Prediction save
     # ──────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _round_to_tick(price: float) -> float:
+        """Round về bội số 50 VND — tick size chuẩn cho hầu hết cổ phiếu VN."""
+        return round(price / 50) * 50
+
     def _get_adj_factors(self):
         """Pre-fetch adj_factor = adj_close/close cho tất cả stocks (1 SQL query)."""
         from django.db import connection
@@ -199,6 +220,25 @@ class Command(BaseCommand):
                     adj_factors[stock_id] = float(adj_close) / float(close)
         return adj_factors
 
+    def _get_latest_close(self):
+        """Pre-fetch raw close price (giá thực, chưa adjust) ngày mới nhất per stock."""
+        from django.db import connection
+        latest_close = {}
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT d.stock_id, d.close
+                FROM api_mlstockdata d
+                INNER JOIN (
+                    SELECT stock_id, MAX(date) AS max_date
+                    FROM api_mlstockdata
+                    GROUP BY stock_id
+                ) latest ON d.stock_id = latest.stock_id AND d.date = latest.max_date
+            """)
+            for stock_id, close in cursor.fetchall():
+                if close:
+                    latest_close[stock_id] = float(close)
+        return latest_close
+
     def _save_predictions(self, predictions: pd.DataFrame):
         """Lưu predictions vào MLPrediction (tất cả) + PotentialStock (UP≥60% + thanh khoản đủ).
 
@@ -210,6 +250,7 @@ class Command(BaseCommand):
 
         today = timezone.now().date()
         adj_factors = self._get_adj_factors()
+        latest_close = self._get_latest_close()
         current_adtv = self._get_current_adtv()
 
         # Xoá PotentialStock cũ cho hôm nay trước khi ghi mới
@@ -246,6 +287,10 @@ class Command(BaseCommand):
                 raw_target = adj_target
                 raw_stop = adj_stop
 
+            # Round target/stop về bội số 50 VND (tick size chuẩn VN)
+            raw_target = self._round_to_tick(raw_target)
+            raw_stop = self._round_to_tick(raw_stop)
+
             # Save to MLPrediction (ALL predictions)
             MLPrediction.objects.update_or_create(
                 stock=ml_stock,
@@ -253,8 +298,8 @@ class Command(BaseCommand):
                 defaults={
                     'trend_class': trend,
                     'trend_probability': proba,
-                    'target_price': round(raw_target, 2),
-                    'stop_loss': round(raw_stop, 2),
+                    'target_price': raw_target,
+                    'stop_loss': raw_stop,
                     'confidence_score': confidence,
                 }
             )
@@ -277,17 +322,16 @@ class Command(BaseCommand):
                     f"ML Prediction: {trend} ({confidence}% confidence). "
                     f"UP: {proba['UP']:.1%}, DOWN: {proba['DOWN']:.1%}, SIDEWAY: {proba['SIDEWAY']:.1%}"
                 )
-                # current_price = adj_close converted to raw
-                adj_current = float(row.get('adj_close', 0)) if 'adj_close' in row.index else 0
-                raw_current = adj_current / adj_factor if adj_factor > 0 else adj_current
+                # current_price = raw close trực tiếp từ DB (không convert, tránh floating point error)
+                raw_current = latest_close.get(ticker, 0)
 
                 PotentialStock.objects.update_or_create(
                     stock=stock,
                     analysis_date=today,
                     defaults={
-                        'current_price': round(raw_current, 2),
-                        'target_price': round(raw_target, 2),
-                        'stop_loss': round(raw_stop, 2),
+                        'current_price': raw_current,
+                        'target_price': raw_target,
+                        'stop_loss': raw_stop,
                         'key_reasons': key_reasons,
                         'confidence': confidence,
                         'timeframe': 'ML',

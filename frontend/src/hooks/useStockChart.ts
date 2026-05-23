@@ -47,6 +47,60 @@ function calculateSMA(data: StockDataPoint[], period: number) {
 	return result;
 }
 
+function calculateBBands(data: StockDataPoint[], period = 20, multiplier = 2) {
+	if (!data || data.length < period) return [];
+	const result = [];
+	for (let i = period - 1; i < data.length; i++) {
+		const slice = data.slice(i - period + 1, i + 1);
+		const mean = slice.reduce((acc, d) => acc + d.close, 0) / period;
+		const variance =
+			slice.reduce((acc, d) => acc + (d.close - mean) ** 2, 0) / period;
+		const std = Math.sqrt(variance);
+		result.push({
+			time: data[i].date,
+			upper: Number((mean + multiplier * std).toFixed(2)),
+			middle: Number(mean.toFixed(2)),
+			lower: Number((mean - multiplier * std).toFixed(2)),
+		});
+	}
+	return result;
+}
+
+function calculateRSI(data: StockDataPoint[], period = 14) {
+	if (!data || data.length < period + 1) return [];
+	const result = [];
+	let avgGain = 0;
+	let avgLoss = 0;
+
+	for (let i = 1; i <= period; i++) {
+		const change = data[i].close - data[i - 1].close;
+		if (change > 0) avgGain += change;
+		else avgLoss += Math.abs(change);
+	}
+	avgGain /= period;
+	avgLoss /= period;
+
+	const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+	result.push({
+		time: data[period].date,
+		value: Number((100 - 100 / (1 + rs)).toFixed(2)),
+	});
+
+	for (let i = period + 1; i < data.length; i++) {
+		const change = data[i].close - data[i - 1].close;
+		const gain = change > 0 ? change : 0;
+		const loss = change < 0 ? Math.abs(change) : 0;
+		avgGain = (avgGain * (period - 1) + gain) / period;
+		avgLoss = (avgLoss * (period - 1) + loss) / period;
+		const rsVal = avgLoss === 0 ? 100 : avgGain / avgLoss;
+		result.push({
+			time: data[i].date,
+			value: Number((100 - 100 / (1 + rsVal)).toFixed(2)),
+		});
+	}
+	return result;
+}
+
 function calculateMACD(
 	data: StockDataPoint[],
 	fast = 12,
@@ -262,13 +316,12 @@ export default function useStockChart({
 		});
 
 		// --- Bollinger Bands ---
-		if (indicators.bbands?.visible && sortedData[0]?.["BBU_20_2.0"]) {
+		if (indicators.bbands?.visible) {
 			if (!refs.bbands.upper) {
 				refs.bbands.upper = chart.addSeries(LineSeries, {
 					color: "rgba(59,130,246,0.5)",
 					lineWidth: 1,
 				});
-
 				refs.bbands.middle = chart.addSeries(LineSeries, {
 					color: "rgba(250, 204, 21, 0.5)",
 					lineWidth: 1,
@@ -279,14 +332,7 @@ export default function useStockChart({
 					lineWidth: 1,
 				});
 			}
-			const bbandsData = sortedData
-				.map((d) => ({
-					time: d.date,
-					upper: d["BBU_20_2.0"],
-					middle: d["BBM_20_2.0"],
-					lower: d["BBL_20_2.0"],
-				}))
-				.filter((d) => d.upper);
+			const bbandsData = calculateBBands(sortedData, 20, 2);
 			refs.bbands.upper.setData(
 				bbandsData.map((d) => ({ time: d.time, value: d.upper })),
 			);
@@ -350,7 +396,7 @@ export default function useStockChart({
 		}
 
 		// --- RSI ---
-		if (indicators.rsi?.visible && sortedData[0]?.["RSI_14"]) {
+		if (indicators.rsi?.visible) {
 			if (!refs.rsi.series) {
 				refs.rsi.series = chart.addSeries(LineSeries, {
 					color: "#fcd34d",
@@ -372,9 +418,7 @@ export default function useStockChart({
 					title: "Oversold",
 				});
 			}
-			const rsiData = sortedData
-				.map((d) => ({ time: d.date, value: d.RSI_14 }))
-				.filter((p) => p.value);
+			const rsiData = calculateRSI(sortedData, 14);
 			refs.rsi.series.setData(rsiData);
 		} else if (refs.rsi.series) {
 			chart.removeSeries(refs.rsi.series);
@@ -382,42 +426,49 @@ export default function useStockChart({
 		}
 
 		// --- Cấu hình layout động ---
-		if (macdCreated && indicators.rsi?.visible) {
+		const bbandsVisible = indicators.bbands?.visible;
+		const macdVisible = macdCreated;
+		const rsiVisible = indicators.rsi?.visible;
+
+		if (macdVisible && rsiVisible) {
+			// Price (40%) | Volume (20%) | MACD (20%) | RSI (20%) với 1% khoảng trống
 			chart
 				.priceScale("right")
-				.applyOptions({ scaleMargins: { top: 0.1, bottom: 0.65 } });
+				.applyOptions({ scaleMargins: { top: 0.05, bottom: 0.55 } });
 			chart.priceScale("volume_scale").applyOptions({
-				scaleMargins: { top: 0.8, bottom: 0 },
+				scaleMargins: { top: 0.46, bottom: 0.34 },
 				visible: false,
 			});
 			chart
 				.priceScale("macd")
-				.applyOptions({ scaleMargins: { top: 0.35, bottom: 0.35 } });
+				.applyOptions({ scaleMargins: { top: 0.67, bottom: 0.17 } });
 			chart
 				.priceScale("rsi")
-				.applyOptions({ scaleMargins: { top: 0.7, bottom: 0.05 } });
-		} else if (macdCreated) {
+				.applyOptions({ scaleMargins: { top: 0.84, bottom: 0.0 } });
+		} else if (macdVisible) {
+			// Price (40%) | Volume (20%) | MACD (40%) với 1% khoảng trống
 			chart
 				.priceScale("right")
-				.applyOptions({ scaleMargins: { top: 0.1, bottom: 0.3 } });
+				.applyOptions({ scaleMargins: { top: 0.05, bottom: 0.55 } });
 			chart.priceScale("volume_scale").applyOptions({
-				scaleMargins: { top: 0.8, bottom: 0 },
+				scaleMargins: { top: 0.46, bottom: 0.34 },
 				visible: false,
 			});
 			chart
 				.priceScale("macd")
-				.applyOptions({ scaleMargins: { top: 0.55, bottom: 0.15 } });
-		} else if (indicators.rsi?.visible) {
+				.applyOptions({ scaleMargins: { top: 0.67, bottom: 0.0 } });
+		} else if (rsiVisible) {
+			// Price (40%) | Volume (20%) | RSI (40%) với 1% khoảng trống
 			chart
 				.priceScale("right")
-				.applyOptions({ scaleMargins: { top: 0.1, bottom: 0.3 } });
+				.applyOptions({ scaleMargins: { top: 0.05, bottom: 0.55 } });
 			chart.priceScale("volume_scale").applyOptions({
-				scaleMargins: { top: 0.8, bottom: 0 },
+				scaleMargins: { top: 0.46, bottom: 0.34 },
 				visible: false,
 			});
 			chart
 				.priceScale("rsi")
-				.applyOptions({ scaleMargins: { top: 0.7, bottom: 0.15 } });
+				.applyOptions({ scaleMargins: { top: 0.67, bottom: 0.0 } });
 		} else {
 			// Layout mặc định
 			chart
