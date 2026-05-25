@@ -193,9 +193,16 @@ MARKET_BREADTH_DOWNTREND = 0.35  # breadth < 35% → DOWNTREND
 # ==============================================================================
 # BACKTEST
 # ==============================================================================
-BACKTEST_INITIAL_CAPITAL = 100_000_000  # 100M VND
-BACKTEST_POSITION_SIZE = 0.10           # 10% per position
+# Giả định T+0 settlement cho phần đánh giá thuật toán, nhưng có tùy chọn T+2.5
+# (xem BACKTEST_SETTLEMENT_DAYS).
+# THỰC TẾ VN: Cổ phiếu mua T+0 về tài khoản chiều T+2, chỉ bán được từ T+3.
+BACKTEST_INITIAL_CAPITAL = 100_000_000   # 100M VND
+BACKTEST_POSITION_SIZE = 0.10            # 10% per position
 BACKTEST_MAX_POSITIONS = 10
-BACKTEST_SLIPPAGE = 0.002               # 0.2%
-BACKTEST_COMMISSION = 0.0025            # 0.25% per side
-BACKTEST_MIN_CONFIDENCE = 50            # Chỉ trade khi confidence >= 50%
+BACKTEST_TOP_K = 3                       # Mỗi ngày mua tối đa 3 mã tốt nhất
+BACKTEST_MIN_CONFIDENCE = 65             # Random 3-class = 33%, ngưỡng 65% lọc đủ mạnh
+BACKTEST_LOT_SIZE = 100                  # 1 lot = 100 cổ phiếu (luật VN)
+BACKTEST_BUY_COST = 0.0045               # 0.45% (slippage 0.2% + commission 0.25%)
+BACKTEST_SELL_COST = 0.0055              # 0.55% (slippage 0.2% + commission 0.25% + stamp tax 0.1%)
+BACKTEST_SETTLEMENT_DAYS = 2             # T+2.5: 2 ngày không được bán sau khi mua
+BACKTEST_TIME_LIMIT = TBM_TIME_LIMIT     # Giữ tối đa 10 ngày (đồng bộ với TBM)
