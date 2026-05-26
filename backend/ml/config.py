@@ -206,3 +206,14 @@ BACKTEST_BUY_COST = 0.0045               # 0.45% (slippage 0.2% + commission 0.2
 BACKTEST_SELL_COST = 0.0055              # 0.55% (slippage 0.2% + commission 0.25% + stamp tax 0.1%)
 BACKTEST_SETTLEMENT_DAYS = 2             # T+2.5: 2 ngày không được bán sau khi mua
 BACKTEST_TIME_LIMIT = TBM_TIME_LIMIT     # Giữ tối đa 10 ngày (đồng bộ với TBM)
+
+# ==============================================================================
+# WALK-FORWARD VALIDATION
+# ==============================================================================
+WF_DATA_START = '2021-01-01'
+WF_DATA_END = '2024-12-31'
+WF_MIN_TRAIN_DAYS = 250          # ~1 năm giao dịch tối thiểu cho fold đầu
+WF_TEST_WINDOW_DAYS = 60         # ~3 tháng test mỗi fold
+WF_ROLL_STEP_DAYS = 60           # ~3 tháng giữa các fold (expanding train)
+WF_EMBARGO_DAYS = EMBARGO_DAYS   # 10 ngày giữa train/test (chống TBM leakage)
+WF_OUTPUT_DIR = DATA_DIR / 'walk_forward'

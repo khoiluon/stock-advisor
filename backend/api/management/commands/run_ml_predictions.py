@@ -20,7 +20,7 @@ from django.utils import timezone
 from ml.config import RAW_DATA_PATH, FEATURES_PATH
 from ml.features import compute_features
 from ml.labeling import create_labeled_dataset
-from ml.prediction import predict_latest
+from ml.prediction import predict_latest, resolve_key_reasons
 
 
 class Command(BaseCommand):
@@ -318,10 +318,7 @@ class Command(BaseCommand):
                 except Stock.DoesNotExist:
                     continue
 
-                key_reasons = (
-                    f"ML Prediction: {trend} ({confidence}% confidence). "
-                    f"UP: {proba['UP']:.1%}, DOWN: {proba['DOWN']:.1%}, SIDEWAY: {proba['SIDEWAY']:.1%}"
-                )
+                key_reasons = resolve_key_reasons(row, trend, confidence, proba)
                 # current_price = raw close trực tiếp từ DB (không convert, tránh floating point error)
                 raw_current = latest_close.get(ticker, 0)
 

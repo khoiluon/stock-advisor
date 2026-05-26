@@ -16,7 +16,7 @@ from django.utils import timezone
 from ml.config import RAW_DATA_PATH, FEATURES_PATH
 from ml.features import compute_features
 from ml.labeling import create_labeled_dataset
-from ml.prediction import predict_latest
+from ml.prediction import predict_latest, resolve_key_reasons
 
 
 class Command(BaseCommand):
@@ -169,10 +169,7 @@ class Command(BaseCommand):
                 raw_target = adj_target
                 raw_stop = adj_stop
 
-            key_reasons = (
-                f"ML Prediction: {trend} ({confidence}% confidence). "
-                f"UP: {proba['UP']:.1%}, DOWN: {proba['DOWN']:.1%}, SIDEWAY: {proba['SIDEWAY']:.1%}"
-            )
+            key_reasons = resolve_key_reasons(row, trend, confidence, proba)
 
             # Chỉ lưu mã có xu hướng UP với confidence >= 50%
             if trend != 'UP' or confidence < 50:

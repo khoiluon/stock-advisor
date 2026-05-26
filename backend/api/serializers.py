@@ -107,7 +107,9 @@ class PotentialStockSerializer(serializers.ModelSerializer):
 
     def get_key_reasons(self, obj):
         if obj.key_reasons:
-            return [reason.strip() for reason in obj.key_reasons.split(',')]
+            # Hỗ trợ ',' (cũ) và '|' (SHAP format mới)
+            separator = '|' if '|' in obj.key_reasons else ','
+            return [reason.strip() for reason in obj.key_reasons.split(separator)]
         return []
 
 class StockDataSerializer(serializers.ModelSerializer):

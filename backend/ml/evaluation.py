@@ -175,3 +175,41 @@ def plot_feature_importance(
     else:
         plt.show()
     plt.close(fig)
+
+
+def plot_shap_summary(
+    model,
+    X: pd.DataFrame,
+    feature_names: List[str],
+    save_path: Optional[Path] = None,
+    class_index: int = 0,
+) -> None:
+    """SHAP beeswarm summary plot cho một class (mặc định UP=0)."""
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        import shap
+    except ImportError:
+        print("shap/matplotlib không có — bỏ qua SHAP summary plot.")
+        return
+
+    explainer = shap.TreeExplainer(model)
+    shap_values = explainer.shap_values(X)
+
+    if isinstance(shap_values, list):
+        sv = shap_values[class_index]
+    else:
+        sv = shap_values[:, :, class_index] if np.ndim(shap_values) == 3 else shap_values
+
+    plt.figure()
+    shap.summary_plot(
+        sv, X, feature_names=feature_names, show=False, max_display=20,
+    )
+    plt.tight_layout()
+
+    if save_path:
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        print(f"Saved SHAP summary → {save_path}")
+    plt.close()

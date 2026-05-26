@@ -23,10 +23,33 @@ from .training import TrendModelTrainer, load_ensemble
 from .utils import prepare_xy
 
 
+def resolve_key_reasons(
+    row: pd.Series,
+    trend: str,
+    confidence: int,
+    proba: dict,
+) -> str:
+    """
+    Ưu tiên key_reasons từ SHAP; fallback chuỗi probability.
+    Dùng chung run_ml_predictions / run_daily_prediction.
+    """
+    if 'key_reasons' in row.index:
+        kr = row['key_reasons']
+        if pd.notna(kr) and str(kr).strip():
+            return str(kr)
+    return (
+        f"ML Prediction: {trend} ({confidence}% confidence). "
+        f"UP: {proba['UP']:.1%}, DOWN: {proba['DOWN']:.1%}, "
+        f"SIDEWAY: {proba['SIDEWAY']:.1%}"
+    )
+
+
 def predict_latest(
     df_features: pd.DataFrame,
     models: Optional[List[Dict]] = None,
     version: str = MODEL_VERSION,
+    explain: bool = True,
+    top_n: int = 3,
 ) -> pd.DataFrame:
     """
     Chạy inference cho ngày mới nhất của mỗi mã.
@@ -42,7 +65,7 @@ def predict_latest(
     -------
     DataFrame với columns:
         stock_id, date, trend_class, trend_probability, target_price,
-        stop_loss, confidence_score
+        stop_loss, confidence_score, key_reasons (nếu explain=True)
     """
     if models is None:
         models = load_ensemble(MODELS_DIR, version)
@@ -97,6 +120,23 @@ def predict_latest(
         "stop_loss": np.round(stop_loss, 0),
         "confidence_score": confidence,
     })
+
+    if explain and models:
+        try:
+            from .explain import explain_predictions
+            shap_df = explain_predictions(
+                df_valid, models=models, top_n=top_n,
+            )
+            output = output.merge(
+                shap_df[['stock_id', 'date', 'key_reasons']],
+                on=['stock_id', 'date'],
+                how='left',
+            )
+        except Exception as exc:
+            print(f"SHAP explanation failed: {exc} — skipping.")
+            output['key_reasons'] = ''
+    else:
+        output['key_reasons'] = ''
 
     print(
         f"Predictions generated: {len(output)} stocks\n"
