@@ -16,6 +16,7 @@ from xgboost import XGBClassifier
 from .config import (
     ALL_FEATURES,
     CATEGORICAL_FEATURES,
+    CLASS_WEIGHTS,
     LABEL_COL,
     LABEL_MAP,
     LGBM_PARAMS,
@@ -57,7 +58,8 @@ class TrendModelTrainer:
         elif algo == "xgboost":
             params = {k: v for k, v in XGB_PARAMS.items() if k != "use_label_encoder"}
             model = XGBClassifier(**params)
-            model.fit(X_train, y_train)
+            sw = np.array([CLASS_WEIGHTS[int(yi)] for yi in y_train])
+            model.fit(X_train, y_train, sample_weight=sw)
         else:
             raise ValueError(f"Unknown algo: {algo}. Use 'lightgbm' or 'xgboost'.")
 

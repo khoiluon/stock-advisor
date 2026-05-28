@@ -16,8 +16,12 @@ MARKET_STATE_PATH = DATA_DIR / 'features' / 'market_state.parquet'
 MODELS_DIR = DATA_DIR / 'models'
 
 # Active model version — thay đổi ở đây khi retrain/tune
+# v8: Regime detection features (KAMA, Hurst, Choppiness) — tham khảo ml4t/engineer
+# v7: CLASS_WEIGHTS {UP=3x, DOWN=1x, SIDEWAY=1.5x} bù R:R=2:1
+# v6: TP=2.0×ATR (R:R=2:1) để vượt chi phí giao dịch ~1%
+# v5: Sideway detection features (adx_weak, bb_squeeze, range_pct, close_vs_ma5_pct, trend_strength, adx_slope)
 # v4: TBM_TP_MULTIPLIER=1.0 (R:R 1:1), same-day TP+SL hit → NaN (loại khỏi training)
-MODEL_VERSION = 'v4'
+MODEL_VERSION = 'v8'
 
 # Đảm bảo thư mục tồn tại
 for d in [DATA_DIR / 'raw', DATA_DIR / 'features', MODELS_DIR]:
@@ -42,7 +46,7 @@ ZERO_VOL_LOOKBACK = 60        # Số ngày nhìn lại tính zero volume ratio
 # ==============================================================================
 # TRIPLE BARRIER METHOD
 # ==============================================================================
-TBM_TP_MULTIPLIER = 1.0      # Take Profit = 1.0 × ATR (R:R = 1:1) — v4: hạ ngưỡng để tăng tỷ lệ UP/DOWN, giảm SIDEWAY
+TBM_TP_MULTIPLIER = 2.0      # Take Profit = 2.0 × ATR (R:R = 2:1) — v6: tăng R:R để vượt transaction cost ~1%
 TBM_SL_MULTIPLIER = 1.0      # Stop Loss = 1 × ATR
 TBM_TIME_LIMIT = 10           # 10 trading days
 TBM_ATR_PERIOD = 14
@@ -102,6 +106,15 @@ CATEGORICAL_FEATURES = [
     'exchange', 'industry', 'day_of_week', 'month',
 ]
 
+SIDEWAY_FEATURES = [
+    'adx_weak', 'bb_squeeze', 'range_pct',
+    'close_vs_ma5_pct', 'trend_strength', 'adx_slope',
+]
+
+REGIME_FEATURES = [
+    'kama', 'price_vs_kama', 'hurst_exponent', 'choppiness_index',
+]
+
 WARNING_FEATURES = [
     'days_zero_volume', 'price_below_par', 'avg_volume_decline',
 ]
@@ -112,6 +125,8 @@ NUMERIC_FEATURES = (
     + MOMENTUM_FEATURES
     + VOLUME_FEATURES
     + PRICE_ACTION_FEATURES
+    + SIDEWAY_FEATURES
+    + REGIME_FEATURES
     + LAG_FEATURES
     + WARNING_FEATURES
 )
@@ -124,6 +139,9 @@ ALL_FEATURES = NUMERIC_FEATURES + CATEGORICAL_FEATURES
 LABEL_COL = 'label'
 LABEL_MAP = {'UP': 0, 'DOWN': 1, 'SIDEWAY': 2}
 LABEL_MAP_INV = {v: k for k, v in LABEL_MAP.items()}
+
+# Class weights để phạt model khi bỏ sót UP (R:R=2:1 → UP quan trọng hơn)
+CLASS_WEIGHTS = {0: 3.0, 1: 1.0, 2: 1.5}  # UP=3x, DOWN=1x, SIDEWAY=1.5x
 
 # ==============================================================================
 # LIGHTGBM DEFAULTS
@@ -138,7 +156,7 @@ LGBM_PARAMS = {
     'colsample_bytree': 0.8,
     'reg_alpha': 0.1,
     'reg_lambda': 0.1,
-    'class_weight': 'balanced',
+    'class_weight': CLASS_WEIGHTS,
     'random_state': 42,
     'verbose': -1,
     'n_jobs': -1,
@@ -200,12 +218,13 @@ BACKTEST_INITIAL_CAPITAL = 100_000_000   # 100M VND
 BACKTEST_POSITION_SIZE = 0.10            # 10% per position
 BACKTEST_MAX_POSITIONS = 10
 BACKTEST_TOP_K = 3                       # Mỗi ngày mua tối đa 3 mã tốt nhất
-BACKTEST_MIN_CONFIDENCE = 65             # Random 3-class = 33%, ngưỡng 65% lọc đủ mạnh
+BACKTEST_MIN_CONFIDENCE = 65            
 BACKTEST_LOT_SIZE = 100                  # 1 lot = 100 cổ phiếu (luật VN)
-BACKTEST_BUY_COST = 0.0045               # 0.45% (slippage 0.2% + commission 0.25%)
-BACKTEST_SELL_COST = 0.0055              # 0.55% (slippage 0.2% + commission 0.25% + stamp tax 0.1%)
+BACKTEST_BUY_COST = 0.0025               # 
+BACKTEST_SELL_COST = 0.0025              # SSI
 BACKTEST_SETTLEMENT_DAYS = 2             # T+2.5: 2 ngày không được bán sau khi mua
 BACKTEST_TIME_LIMIT = TBM_TIME_LIMIT     # Giữ tối đa 10 ngày (đồng bộ với TBM)
+BACKTEST_TRAILING_MULTIPLIER = 0.67      # Hệ số siết trailing stop (0.67=chặt hơn 33%)
 
 # ==============================================================================
 # WALK-FORWARD VALIDATION

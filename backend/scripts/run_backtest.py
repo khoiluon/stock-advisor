@@ -41,12 +41,24 @@ def main(
     top_k: int,
     version: str,
     no_report: bool,
+    start_date: str = '',
+    end_date: str = '',
 ) -> None:
+    import pandas as pd
+
     print(f"Step 1: Load features ({FEATURES_PATH})")
     df = load_features(FEATURES_PATH)
 
     print("\nStep 2: Chronological split → giữ test set")
     _, df_test = chronological_split(df)
+
+    # Optional date range filter (--start-date, --end-date)
+    if start_date:
+        df_test = df_test[df_test['date'] >= pd.Timestamp(start_date)]
+        print(f"  Filter start: {start_date}")
+    if end_date:
+        df_test = df_test[df_test['date'] <= pd.Timestamp(end_date)]
+        print(f"  Filter end:   {end_date}")
 
     # Backtest chỉ cần features + OHLCV của test set. KHÔNG cần label
     # (label chỉ dùng cho evaluate_only / training).
@@ -128,6 +140,14 @@ if __name__ == '__main__':
         '--no-report', action='store_true',
         help='Bỏ qua QuantStats HTML report (vẫn xuất CSV).',
     )
+    parser.add_argument(
+        '--start-date', type=str, default='',
+        help='Ngày bắt đầu backtest (vd: 2025-01-01). Mặc định: từ đầu test set.',
+    )
+    parser.add_argument(
+        '--end-date', type=str, default='',
+        help='Ngày kết thúc backtest (vd: 2025-12-31). Mặc định: đến cuối data.',
+    )
     args = parser.parse_args()
 
     main(
@@ -136,4 +156,6 @@ if __name__ == '__main__':
         top_k=args.top_k,
         version=args.version,
         no_report=args.no_report,
+        start_date=args.start_date,
+        end_date=args.end_date,
     )

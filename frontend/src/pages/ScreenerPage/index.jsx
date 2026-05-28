@@ -24,9 +24,9 @@ const ScreenerPage = () => {
 	const [dateFilter, setDateFilter] = useState(""); // '' = latest
 	const [sortBy, setSortBy] = useState("confidence"); // 'confidence' | 'ticker'
 
-	// ML queries
-	const { data: marketState } = useMarketStateQuery();
-	const { data: anomalies } = useAnomalyAlertsQuery(7);
+	// ML queries — sync với dateFilter
+	const { data: marketState } = useMarketStateQuery(dateFilter || undefined);
+	const { data: anomalies } = useAnomalyAlertsQuery(7, dateFilter || undefined);
 	const { data: modelInfo } = useMLModelInfoQuery();
 
 	const fetchSuggestions = useCallback(async () => {

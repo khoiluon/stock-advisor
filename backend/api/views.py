@@ -362,13 +362,19 @@ class MarketStateAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        date_param = request.query_params.get('date', '')
         days = request.query_params.get('days', 30)
         try:
             days = int(days)
         except (ValueError, TypeError):
             days = 30
 
-        states = MarketState.objects.order_by('-date')[:days]
+        qs = MarketState.objects.order_by('-date')
+        if date_param:
+            qs = qs.filter(date=date_param)
+        else:
+            qs = qs[:days]
+        states = qs
         current = states.first() if states.exists() else None
 
         return Response({
@@ -399,9 +405,13 @@ class AnomalyAlertListAPIView(generics.ListAPIView):
         except (ValueError, TypeError):
             days = 7
 
-        from django.utils import timezone as tz
-        from datetime import timedelta
-        qs = qs.filter(detected_at__gte=tz.now() - timedelta(days=days))
+        date_param = self.request.query_params.get('date', '')
+        if date_param:
+            qs = qs.filter(detected_at__date=date_param)
+        else:
+            from django.utils import timezone as tz
+            from datetime import timedelta
+            qs = qs.filter(detected_at__gte=tz.now() - timedelta(days=days))
 
         return qs
 

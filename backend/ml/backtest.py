@@ -35,6 +35,7 @@ from .config import (
     BACKTEST_SETTLEMENT_DAYS,
     BACKTEST_TIME_LIMIT,
     BACKTEST_TOP_K,
+    BACKTEST_TRAILING_MULTIPLIER,
     DATA_DIR,
     MODEL_VERSION,
 )
@@ -53,6 +54,8 @@ class Position:
     tp_price: float
     sl_price: float
     shares: int
+    trailing_high: float = 0.0    # Đỉnh cao nhất từ khi mua (trailing stop)
+    sl_gap: float = 0.0           # Khoảng cách SL từ entry (ATR-based)
     days_held: int = 0          # Tăng mỗi ngày trading, dùng cho T+2.5 + time limit
 
 
@@ -131,6 +134,31 @@ def run_backtest(
     df = df_feat.merge(df_pred, on=['stock_id', 'date'], how='left')
     df = df.sort_values(['date', 'stock_id']).reset_index(drop=True)
 
+    # ── Market state per date (breadth-based: % stocks above SMA50) ──
+    market_states: Dict[pd.Timestamp, str] = {}
+    if 'sma_50' in df_features.columns and 'adj_close' in df_features.columns:
+        breadth = (
+            df_features[['date', 'stock_id', 'adj_close', 'sma_50']]
+            .dropna(subset=['sma_50'])
+            .assign(above_sma=lambda x: (x['adj_close'] > x['sma_50']).astype(int))
+            .groupby('date')['above_sma']
+            .agg(['sum', 'count'])
+        )
+        breadth['pct'] = breadth['sum'] / breadth['count']
+        for d, row in breadth.iterrows():
+            pct = row['pct']
+            if pct >= 0.60:
+                market_states[d] = 'UPTREND'
+            elif pct < 0.35:
+                market_states[d] = 'DOWNTREND'
+            else:
+                market_states[d] = 'SIDEWAY'
+        if verbose:
+            u = sum(1 for v in market_states.values() if v == 'UPTREND')
+            dw = sum(1 for v in market_states.values() if v == 'DOWNTREND')
+            sw = sum(1 for v in market_states.values() if v == 'SIDEWAY')
+            print(f"Market states: UPTREND={u}, DOWNTREND={dw}, SIDEWAY={sw}")
+
     # Lookup tables để truy cập O(1):
     # ohlc_lookup[(date, stock_id)] = row dict
     # Vì stock_id là string ngắn, dùng dict lồng cũng OK.
@@ -196,16 +224,27 @@ def run_backtest(
             day_low = day_ohlc['low']
             day_close = day_ohlc['close']
 
+            # Trailing stop: kéo SL lên theo đỉnh mới
+            if pos.trailing_high > 0 and pos.sl_gap > 0:
+                if day_high > pos.trailing_high:
+                    pos.trailing_high = day_high
+                trailing_sl = pos.trailing_high - pos.sl_gap * BACKTEST_TRAILING_MULTIPLIER
+                if trailing_sl > pos.sl_price:
+                    pos.sl_price = trailing_sl
+
             exit_raw_price: Optional[float] = None
             exit_reason: Optional[str] = None
 
+            # Phân biệt trailing stop exit (có thể lời) vs fixed SL (luôn lỗ)
+            orig_sl = pos.raw_entry_price - pos.sl_gap if pos.sl_gap > 0 else pos.sl_price
+            trailing_used = pos.sl_price > orig_sl * 1.001  # đã được kéo lên
+
             if day_high >= pos.tp_price and day_low <= pos.sl_price:
-                # SAME-DAY HIT: giả định SL chạm trước (conservative)
                 exit_raw_price = pos.sl_price
-                exit_reason = 'SL_SAME_DAY'
+                exit_reason = 'TRAIL_SAME_DAY' if trailing_used else 'SL_SAME_DAY'
             elif day_low <= pos.sl_price:
                 exit_raw_price = pos.sl_price
-                exit_reason = 'SL'
+                exit_reason = 'TRAIL' if trailing_used else 'SL'
             elif day_high >= pos.tp_price:
                 exit_raw_price = pos.tp_price
                 exit_reason = 'TP'
@@ -242,7 +281,11 @@ def run_backtest(
 
         # b. ENTRY PHASE --------------------------------------------------
         # Tín hiệu hôm nay → mua open ngày next_day. Cần next_day tồn tại.
-        if next_day is not None and today in pred_by_date:
+        # Market state filter: CHỈ vào lệnh khi thị trường UPTREND
+        ms = market_states.get(today, 'UNKNOWN')
+        if ms != 'UPTREND':
+            pass  # skip all buys unless market is trending up
+        elif next_day is not None and today in pred_by_date:
             preds_today = pred_by_date[today]
             candidates = preds_today[
                 (preds_today['trend_class'] == 'UP')
@@ -264,6 +307,11 @@ def run_backtest(
                 if cand.stock_id in currently_held:
                     continue
 
+                # Volume filter: skip if volume < average
+                vol_z = getattr(cand, 'volume_zscore_20', 0) or 0
+                if vol_z < 0:
+                    continue
+
                 next_ohlc = ohlc_lookup.get(next_day, {}).get(cand.stock_id)
                 if next_ohlc is None or pd.isna(next_ohlc['open']) or next_ohlc['open'] <= 0:
                     continue
@@ -281,13 +329,26 @@ def run_backtest(
                     continue
 
                 cash -= actual_cost
+                # Tính TP/SL dựa trên entry price, tránh gap phá R:R
+                adj_close_cand = float(getattr(cand, 'adj_close', 0) or 0)
+                if adj_close_cand > 0 and float(cand.target_price) > adj_close_cand:
+                    tp_mult = float(cand.target_price) / adj_close_cand - 1.0
+                    tp_price = raw_entry * (1.0 + tp_mult)
+                    sl_mult = 1.0 - float(cand.stop_loss) / adj_close_cand
+                    sl_price = raw_entry * (1.0 - sl_mult)
+                else:
+                    tp_price = float(cand.target_price)
+                    sl_price = float(cand.stop_loss)
+                sl_gap = raw_entry - sl_price
                 open_positions.append(Position(
                     stock_id=cand.stock_id,
                     entry_date=next_day,
                     entry_price=gross_entry_price,
                     raw_entry_price=raw_entry,
-                    tp_price=float(cand.target_price),
-                    sl_price=float(cand.stop_loss),
+                    tp_price=tp_price,
+                    sl_price=sl_price,
+                    trailing_high=raw_entry,
+                    sl_gap=sl_gap,
                     shares=shares,
                     days_held=0,
                 ))
@@ -492,8 +553,26 @@ def _print_summary(metrics: Dict[str, float], trades_df: pd.DataFrame) -> None:
     if trades_df is not None and not trades_df.empty:
         reason_counts = trades_df['reason'].value_counts()
         print("  Exit reason breakdown:")
+        labels = {
+            'TP': 'Chốt lời (TP)',
+            'TRAIL': 'Trailing stop (có lời)',
+            'TRAIL_SAME_DAY': 'Trailing same-day',
+            'SL': 'Cắt lỗ (lỗ)',
+            'SL_SAME_DAY': 'Cắt lỗ same-day (lỗ)',
+            'TIME_EXIT': 'Hết thời gian',
+            'EOB_CLOSE': 'Đóng cuối kỳ',
+        }
         for reason, cnt in reason_counts.items():
-            print(f"    {reason:<14} {cnt:>5d}  ({cnt / len(trades_df) * 100:>5.1f}%)")
+            label = labels.get(reason, reason)
+            print(f"    {label:<28} {cnt:>5d}  ({cnt / len(trades_df) * 100:>5.1f}%)")
+
+        # Phân biệt lời/lỗ rõ ràng
+        wins = trades_df[trades_df['pnl'] > 0]
+        loss = trades_df[trades_df['pnl'] <= 0]
+        print(f"\n  Lệnh có lời: {len(wins)} ({len(wins)/len(trades_df)*100:.1f}%)")
+        print(f"  Lệnh lỗ:     {len(loss)} ({len(loss)/len(trades_df)*100:.1f}%)")
+        print(f"  Lời TB:      {wins['pnl_pct'].mean()*100:+.2f}%")
+        print(f"  Lỗ TB:       {loss['pnl_pct'].mean()*100:+.2f}%")
     print("=" * 60 + "\n")
 
 

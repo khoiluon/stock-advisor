@@ -7,15 +7,19 @@ import type {
 	MLModelInfo,
 } from "@/types/Stock";
 
-export function useMarketStateQuery() {
+export function useMarketStateQuery(date?: string) {
 	const token = localStorage.getItem("token");
 
 	return useQuery({
-		queryKey: ["ml", "market-state"],
+		queryKey: ["ml", "market-state", date],
 		queryFn: async () => {
 			if (!token) throw new Error("Not logged in");
+			const params: Record<string, string | number> = {};
+			if (date) params.date = date;
+			else params.days = 30;
 			const res = await authApi(token).get<MarketStateData>(
 				endpoint.ml.marketState,
+				{ params },
 			);
 			return res.data;
 		},
@@ -24,16 +28,19 @@ export function useMarketStateQuery() {
 	});
 }
 
-export function useAnomalyAlertsQuery(days = 7) {
+export function useAnomalyAlertsQuery(days = 7, date?: string) {
 	const token = localStorage.getItem("token");
 
 	return useQuery({
-		queryKey: ["ml", "anomalies", days],
+		queryKey: ["ml", "anomalies", days, date],
 		queryFn: async () => {
 			if (!token) throw new Error("Not logged in");
+			const params: Record<string, string | number> = {};
+			if (date) params.date = date;
+			else params.days = days;
 			const res = await authApi(token).get<{ results: AnomalyAlert[] }>(
 				endpoint.ml.anomalies,
-				{ params: { days } },
+				{ params },
 			);
 			return res.data.results ?? res.data;
 		},

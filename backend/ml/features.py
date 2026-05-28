@@ -126,6 +126,40 @@ def _compute_single_stock_features(df: pd.DataFrame) -> pd.DataFrame:
     df['upper_shadow_ratio'] = np.where(candle_range != 0, (h - body_top) / candle_range, 0)
     df['lower_shadow_ratio'] = np.where(candle_range != 0, (body_bot - l) / candle_range, 0)
 
+    # ===== SIDEWAY / RANGE DETECTION =====
+    # ADX < 20 = xu hướng yếu, tiềm năng sideway
+    df['adx_weak'] = (df['adx_14'] < 20).astype(int)
+
+    # Bollinger squeeze: giá nằm giữa dải (30%-70%) = sideway
+    df['bb_squeeze'] = ((df['bb_percent'] > 0.3) & (df['bb_percent'] < 0.7)).astype(int)
+
+    # Biên độ dao động 10 ngày / SMA20 — nhỏ = đi ngang
+    h_10d = h.rolling(10).max()
+    l_10d = l.rolling(10).min()
+    df['range_pct'] = np.where(df['sma_20'] != 0, (h_10d - l_10d) / df['sma_20'], np.nan)
+
+    # Khoảng cách giá vs MA5 — nhỏ = giá đứng yên
+    ma5 = ta.sma(c, length=5)
+    df['close_vs_ma5_pct'] = np.where(c != 0, (c - ma5).abs() / c, np.nan)
+
+    # Sức mạnh xu hướng — abs(close - close 10d ago) / ATR
+    df['trend_strength'] = np.where(df['atr_14'] != 0, (c - c.shift(10)).abs() / df['atr_14'], np.nan)
+
+    # ADX slope: ADX đang giảm = xu hướng yếu đi → sideway
+    df['adx_slope'] = df['adx_14'] - df['adx_14'].shift(5)
+
+    # ===== REGIME DETECTION =====
+    # KAMA — Kaufman Adaptive Moving Average (theo noise)
+    _kama = _compute_kama(c.values)
+    df['kama'] = _kama
+    df['price_vs_kama'] = np.where(_kama != 0, (c.values - _kama) / _kama, np.nan)
+
+    # Hurst Exponent — >0.5 trend, <0.5 mean-revert (rolling 100)
+    df['hurst_exponent'] = _compute_rolling_hurst(c.values, window=100)
+
+    # Choppiness Index — 100=sideway, 0=strong trend
+    df['choppiness_index'] = _compute_choppiness(h.values, l.values, c.values)
+
     # ===== LAG FEATURES =====
     df['rsi_lag_1'] = df['rsi_14'].shift(1)
     df['rsi_lag_3'] = df['rsi_14'].shift(3)
@@ -161,18 +195,97 @@ def _compute_single_stock_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+# ==============================================================================
+# REGIME DETECTION HELPERS
+# ==============================================================================
+def _compute_kama(close: np.ndarray) -> np.ndarray:
+    """Kaufman Adaptive Moving Average — phản ứng nhanh khi trend, chậm khi sideway."""
+    n = len(close)
+    if n < 10:
+        return np.full(n, np.nan)
+
+    er_period = 10
+    fast_n, slow_n = 2, 30
+    fast_sc = 2.0 / (fast_n + 1)
+    slow_sc = 2.0 / (slow_n + 1)
+
+    # Efficiency Ratio = abs(direction) / volatility
+    direction = np.abs(close[er_period:] - close[:-er_period])
+    volatility = np.zeros(n - er_period)
+    for i in range(er_period, n):
+        volatility[i - er_period] = np.sum(np.abs(np.diff(close[i - er_period:i + 1])))
+
+    er = np.zeros(n)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        er[er_period:] = np.where(volatility != 0, direction / volatility, 0.0)
+
+    # Smoothing Constant
+    sc = (er * (fast_sc - slow_sc) + slow_sc) ** 2
+
+    # Recursive KAMA
+    kama = np.full(n, np.nan)
+    kama[er_period] = close[er_period]
+    for i in range(er_period + 1, n):
+        kama[i] = kama[i - 1] + sc[i] * (close[i] - kama[i - 1])
+
+    return kama
+
+
+def _compute_rolling_hurst(close: np.ndarray, window: int = 100) -> np.ndarray:
+    """Rolling Hurst Exponent (R/S method). >0.5=trending, <0.5=mean-reverting."""
+    n = len(close)
+    hurst = np.full(n, np.nan)
+    if n < window + 2:
+        return hurst
+
+    log_close = np.log(close)
+    for i in range(window, n):
+        seg = log_close[i - window:i + 1]
+        returns = np.diff(seg)
+        if len(returns) < 2:
+            continue
+        r_mean = returns.mean()
+        cum_dev = np.cumsum(returns - r_mean)
+        R = cum_dev.max() - cum_dev.min()
+        S = returns.std(ddof=1)
+        if S > 1e-12 and R > 0:
+            hurst[i] = np.log(R / S) / np.log(window)
+
+    return hurst
+
+
+def _compute_choppiness(high: np.ndarray, low: np.ndarray, close: np.ndarray) -> np.ndarray:
+    """Choppiness Index — 100=sideway, 0=strong trend. Dựa trên ATR và biên độ."""
+    n = len(high)
+    period = 14
+    ci = np.full(n, np.nan)
+
+    if n < period + 1:
+        return ci
+
+    # True Range
+    tr = np.maximum(
+        high - low,
+        np.maximum(
+            np.abs(high - np.roll(close, 1)),
+            np.abs(low - np.roll(close, 1)),
+        ),
+    )
+    tr[0] = high[0] - low[0]
+
+    # Tổng True Range và biên độ 14 ngày
+    for i in range(period, n):
+        sum_tr = np.sum(tr[i - period + 1:i + 1])
+        max_high = np.max(high[i - period + 1:i + 1])
+        min_low = np.min(low[i - period + 1:i + 1])
+        denom = max_high - min_low
+        if sum_tr > 0 and denom > 0:
+            ci[i] = 100.0 * np.log10(sum_tr / denom) / np.log10(period)
+
+    return ci
+
+
 def compute_features(df: pd.DataFrame, apply_liquidity_filter: bool = True) -> pd.DataFrame:
-    """
-    Tính features cho tất cả stocks.
-
-    Input:  DataFrame với columns [stock_id, date, adj_open, adj_high, adj_low, adj_close,
-            adj_volume, exchange, industry]
-    Output: DataFrame gốc + ~50 feature columns, đã drop warmup NaN rows.
-
-    Args:
-        apply_liquidity_filter: Nếu True, lọc cổ phiếu thanh khoản thấp trước khi return.
-            Dùng True cho training pipeline, False nếu muốn giữ tất cả stocks.
-    """
     from .config import (
         NUMERIC_FEATURES, MIN_ADTV, MIN_PRICE,
         MAX_ZERO_VOL_RATIO, LIQUIDITY_WINDOW, ZERO_VOL_LOOKBACK,
@@ -241,13 +354,7 @@ def _filter_illiquid_stocks(
     adtv_window: int = 20,
     zero_vol_lookback: int = 60,
 ) -> pd.DataFrame:
-    """Lọc stocks có thanh khoản thấp dựa trên median ADTV toàn lịch sử per stock.
 
-    Tiêu chí loại (bất kỳ 1 trong 3):
-    1. Median ADTV_20 < min_adtv (giá trị giao dịch trung bình quá thấp)
-    2. Median adj_close < min_price (penny stock)
-    3. Zero volume ratio (60 ngày gần nhất) > max_zero_vol_ratio
-    """
     drop_tickers = set()
 
     for ticker, group in df.groupby('stock_id'):
@@ -255,7 +362,7 @@ def _filter_illiquid_stocks(
         c = g['adj_close']
         v = g['adj_volume']
 
-        # 1. Median ADTV_20 toàn lịch sử
+        # 1. giá trị trung bình giao dịch thấp
         trade_value = c * v
         adtv_20 = trade_value.rolling(adtv_window, min_periods=10).mean()
         median_adtv = adtv_20.median()
@@ -263,13 +370,13 @@ def _filter_illiquid_stocks(
             drop_tickers.add(ticker)
             continue
 
-        # 2. Median giá quá thấp (penny stock)
+        # 2. giá thấp
         median_price = c.median()
         if pd.isna(median_price) or median_price < min_price:
             drop_tickers.add(ticker)
             continue
 
-        # 3. Zero volume ratio gần nhất
+        # 3. 30% trong 60 ngày gần nhất có volume = 0
         recent = v.tail(zero_vol_lookback)
         zero_ratio = (recent == 0).sum() / len(recent)
         if zero_ratio > max_zero_vol_ratio:

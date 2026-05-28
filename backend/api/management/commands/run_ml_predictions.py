@@ -152,7 +152,10 @@ class Command(BaseCommand):
             try:
                 anomaly_results = self._run_anomaly_detection(df_features)
                 if anomaly_results is not None and not anomaly_results.empty:
-                    anomalies = anomaly_results[anomaly_results['is_anomaly']]
+                    anomalies = anomaly_results[
+                        (anomaly_results['is_anomaly']) &
+                        (anomaly_results['anomaly_score'] < -0.10)
+                    ]
                     self.stdout.write(f"  Detected {len(anomalies)} anomalies out of {len(anomaly_results)} stocks")
                     if not dry_run:
                         saved_a = self._save_anomalies(anomalies)

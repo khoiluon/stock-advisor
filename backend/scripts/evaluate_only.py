@@ -1,10 +1,5 @@
 """
-Evaluate ensemble trên holdout test set (2025+).
-Dùng models đã train sẵn — không train lại.
 
-Usage:
-    python scripts/evaluate_only.py           # full test set
-    python scripts/evaluate_only.py --sample  # 10k rows để test nhanh
 """
 import sys
 import os

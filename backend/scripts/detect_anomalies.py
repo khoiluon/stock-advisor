@@ -70,7 +70,10 @@ def main() -> None:
         print("=" * 60)
         results = detector.predict_latest(df)
 
-        anomalies = results[results['is_anomaly']].sort_values('anomaly_score')
+        anomalies = results[
+            (results['is_anomaly']) &
+            (results['anomaly_score'] < -0.10)
+        ].sort_values('anomaly_score')
 
         print(f"\n--- Anomaly Summary ---")
         print(f"Total stocks analyzed: {len(results)}")

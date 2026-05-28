@@ -153,28 +153,7 @@ def predict_all(
     models: Optional[List[Dict]] = None,
     version: str = MODEL_VERSION,
 ) -> pd.DataFrame:
-    """
-    Chạy inference cho TẤT CẢ rows trong df_features.
 
-    Khác với predict_latest() chỉ lấy ngày cuối cùng mỗi mã, hàm này predict
-    toàn bộ rows → dùng cho backtest walk-forward (mỗi ngày một tín hiệu).
-
-    Parameters
-    ----------
-    df_features : DataFrame đã có đầy đủ features (output của ml/features.py).
-                  Phải có columns: stock_id, date, adj_close, atr_14, + features.
-                  Khuyến nghị: lọc trước bằng chronological_split để chỉ predict
-                  trên test set (tiết kiệm thời gian, tránh leak train data vào
-                  backtest report).
-    models      : List model artifacts (nếu None thì load từ MODELS_DIR).
-    version     : model version để load nếu models=None.
-
-    Returns
-    -------
-    DataFrame với columns:
-        stock_id, date, adj_close, adj_open, adj_high, adj_low,
-        trend_class, trend_probability, target_price, stop_loss, confidence_score
-    """
     if models is None:
         models = load_ensemble(MODELS_DIR, version)
 
@@ -195,7 +174,7 @@ def predict_all(
             f"(adj_close, atr_14)."
         )
 
-    X, _ = prepare_xy(df_valid, feature_cols=feature_cols)
+    X, _ = prepare_xy(df_valid, feature_cols=feature_cols, label_col=None)
 
     # Ensemble predict
     result = TrendModelTrainer.predict_ensemble(X, models)

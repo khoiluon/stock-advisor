@@ -198,4 +198,6 @@ def prepare_xy(
 
     y = df[label_col].astype(int)
 
+    X = X.replace([np.inf, -np.inf], np.nan)
+    
     return X, y
