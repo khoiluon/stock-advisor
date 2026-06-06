@@ -8,7 +8,6 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 import pandas as pd
-# import pandas_ta as ta
 from rest_framework import permissions
 from django.conf import settings
 # import google.generativeai as genai
@@ -151,7 +150,7 @@ class StockDataAPIView(APIView):
             for col in ohlcv_columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
 
-            # BƯỚC 4: Tính toán các chỉ báo kỹ thuật bằng pandas_ta
+            # BƯỚC 4: Tính toán các chỉ báo kỹ thuật bằng pandas-ta-classic
             # Thư viện này tự động tìm các cột 'open', 'high', 'low', 'close', 'volume'
             # df.ta.macd(fast=12, slow=26, signal=9, append=True)
             # df.ta.rsi(length=14, append=True)
